@@ -1,0 +1,4973 @@
+diff --git a/usr/src/Makefile b/usr/src/Makefile
+index 09530d4..371646d 100644
+--- a/usr/src/Makefile
++++ b/usr/src/Makefile
+@@ -95,12 +95,17 @@ check :=		TARGET= check
+ 
+ .KEEP_STATE:
+ 
++# Not all platforms have closed binaries, so we need to cheat.
++i386_CLOSEDBINS=closedbins
++sparc_CLOSEDBINS=closedbins
++arm_CLOSEDBINS=
++
+ #
+ # Note: install does not cause a build in pkg.  To build packages,
+ #	cd pkg and do a 'make install'
+ #
+ 
+-all: mapfiles closedbins sgs .WAIT $(SUBDIRS) pkg
++all: mapfiles $($(MACH)_CLOSEDBINS) sgs .WAIT $(SUBDIRS) pkg
+ 
+ #
+ # The _msg build is a two-step process.  First, the _msg dependency
+@@ -121,7 +126,7 @@ install: install1 install2 _msg stage-licenses
+ stage-licenses: install2
+ 	@cd pkg; pwd; $(MAKE) stage-licenses
+ 
+-install1: mapfiles closedbins sgs
++install1: mapfiles $($(MACH)_CLOSEDBINS) sgs
+ 
+ install2: install1 $(SUBDIRS)
+ 
+@@ -190,7 +195,7 @@ sgs: rootdirs .WAIT sysheaders userheaders .WAIT \
+ # dependent on a number of constant mapfiles, the tools themselves are
+ # required to build the generated mapfiles.
+ #
+-setup: closedbins bldtools sgs mapfiles
++setup: $($(MACH)_CLOSEDBINS) bldtools sgs mapfiles
+ 
+ bldtools:
+ 	@cd tools; pwd; $(MAKE) install
+diff --git a/usr/src/Makefile.master b/usr/src/Makefile.master
+index 6549061..5646200 100644
+--- a/usr/src/Makefile.master
++++ b/usr/src/Makefile.master
+@@ -74,10 +74,22 @@ PATCH_BUILD=				$(POUND_SIGN)
+ 
+ # SPARC_BLD is '#' for an Intel build.
+ # INTEL_BLD is '#' for a Sparc build.
+-SPARC_BLD_1=    $(MACH:i386=$(POUND_SIGN))
++SPARC_BLD_2=    $(MACH:arm=$(POUND_SIGN))
++SPARC_BLD_1=    $(SPARC_BLD_2:i386=$(POUND_SIGN))
+ SPARC_BLD=      $(SPARC_BLD_1:sparc=)
+-INTEL_BLD_1=    $(MACH:sparc=$(POUND_SIGN))
++INTEL_BLD_2=    $(MACH:arm=$(POUND_SIGN))
++INTEL_BLD_1=    $(INTEL_BLD_2:sparc=$(POUND_SIGN))
+ INTEL_BLD=      $(INTEL_BLD_1:i386=)
++ARM_BLD_2=	$(MACH:i386=$(POUND_SIGN))
++ARM_BLD_1=	$(ARM_BLD_2:sparc=$(POUND_SIGN))
++ARM_BLD=	$(ARM_BLD_1:arm=)
++
++# CROSS_BLD is "#" if NATIVE_MACH and MACH are the same, and the empty string
++# otherwise.  NATIVE_BLD is the opposite
++CROSS_BLD_1=	$(NATIVE_MACH:$(MACH)=$(POUND_SIGN))
++CROSS_BLD=	$(CROSS_BLD_1:$(NATIVE_MACH)=)
++NATIVE_BLD=
++$(CROSS_BLD)NATIVE_BLD=	$(POUND_SIGN)
+ 
+ # The variables below control the compilers used during the build.
+ # There are a number of permutations.
+@@ -123,17 +135,24 @@ JAVA_ROOT=	/usr/java
+ # define to build with JAVA 8
+ BLD_JAVA_8=	$(POUND_SIGN)
+ 
+-GCC_ROOT=	/opt/gcc/4.4.4
++i386_GCC_ROOT=	/opt/gcc/4.4.4
++sparc_GCC_ROOT=	/opt/gcc/4.4.4
++arm_GCC_ROOT=	/opt/gcc/4.4.4
++aarch64_GCC_ROOT=/opt/gcc/4.4.4
++
++NATIVE_GCC_ROOT=	$($(NATIVE_MACH)_GCC_ROOT)
++
++GCC_ROOT=	$($(MACH)_GCC_ROOT)
+ GCCLIBDIR=	$(GCC_ROOT)/lib
+ GCCLIBDIR64=	$(GCC_ROOT)/lib/$(MACH64)
+ 
+ DOCBOOK_XSL_ROOT=	/usr/share/sgml/docbook/xsl-stylesheets
+ 
+ RPCGEN=		/usr/bin/rpcgen
+-STABS=		$(ONBLD_TOOLS)/bin/$(MACH)/stabs
+-ELFEXTRACT=	$(ONBLD_TOOLS)/bin/$(MACH)/elfextract
+-MBH_PATCH=	$(ONBLD_TOOLS)/bin/$(MACH)/mbh_patch
+-BTXLD=		$(ONBLD_TOOLS)/bin/$(MACH)/btxld
++STABS=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/stabs
++ELFEXTRACT=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/elfextract
++MBH_PATCH=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/mbh_patch
++BTXLD=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/btxld
+ ECHO=		echo
+ INS=		install
+ TRUE=		true
+@@ -166,11 +185,9 @@ JAVAH=		$(JAVA_ROOT)/bin/javah
+ JAVADOC=	$(JAVA_ROOT)/bin/javadoc
+ RMIC=		$(JAVA_ROOT)/bin/rmic
+ JAR=		$(JAVA_ROOT)/bin/jar
+-CTFCONVERT=	$(ONBLD_TOOLS)/bin/$(MACH)/ctfconvert
+-CTFMERGE=	$(ONBLD_TOOLS)/bin/$(MACH)/ctfmerge
+-CTFSTABS=	$(ONBLD_TOOLS)/bin/$(MACH)/ctfstabs
+-CTFSTRIP=	$(ONBLD_TOOLS)/bin/$(MACH)/ctfstrip
+-NDRGEN=		$(ONBLD_TOOLS)/bin/$(MACH)/ndrgen
++CTFSTABS=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/ctfstabs
++CTFSTRIP=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/ctfstrip
++NDRGEN=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/ndrgen
+ GENOFFSETS=	$(ONBLD_TOOLS)/bin/genoffsets
+ XREF=		$(ONBLD_TOOLS)/bin/xref
+ FIND=		/usr/bin/find
+@@ -187,7 +204,7 @@ TOUCH=		/usr/bin/touch
+ WC=		/usr/bin/wc
+ XARGS=		/usr/bin/xargs
+ ELFEDIT=	/usr/bin/elfedit
+-ELFSIGN=	/usr/bin/elfsign
++ELFSIGN=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/elfsign
+ DTRACE=		/usr/sbin/dtrace -xnolibs
+ UNIQ=		/usr/bin/uniq
+ TAR=		/usr/bin/tar
+@@ -251,8 +268,9 @@ INS.symlink=	$(RM) $@; $(SYMLINK) $(INSLINKTARGET) $@
+ #
+ INS.pyfile=	$(RM) $@; $(SED) -e "1s:^\#!@PYTHON@:\#!$(PYTHON):" < $< > $@; $(CHMOD) $(FILEMODE) $@; $(TOUCH) -r $< $@
+ 
+-# MACH must be set in the shell environment per uname -p on the build host
+-# More specific architecture variables should be set in lower makefiles.
++# MACH must be set in the shell environment to describe the target machine.
++# If $MACH does not match uname -p on the build host, NATIVE_MACH must be set
++# too.  More specific architecture variables should be set in lower makefiles.
+ #
+ # MACH64 is derived from MACH, and BUILD64 is set to `#' for
+ # architectures on which we do not build 64-bit versions.
+@@ -261,7 +279,8 @@ INS.pyfile=	$(RM) $@; $(SED) -e "1s:^\#!@PYTHON@:\#!$(PYTHON):" < $< > $@; $(CHM
+ # Set BUILD64=# in the environment to disable 64-bit amd64
+ # builds on i386 machines.
+ 
+-MACH64_1=	$(MACH:sparc=sparcv9)
++MACH64_2=	$(MACH:arm=aarch64)
++MACH64_1=	$(MACH64_2:sparc=sparcv9)
+ MACH64=		$(MACH64_1:i386=amd64)
+ 
+ MACH32_1=	$(MACH:sparc=sparcv7)
+@@ -269,6 +288,7 @@ MACH32=		$(MACH32_1:i386=i86)
+ 
+ sparc_BUILD64=
+ i386_BUILD64=
++arm_BUILD64=
+ BUILD64=	$($(MACH)_BUILD64)
+ 
+ #
+@@ -334,6 +354,8 @@ CCNOAUTOINLINE= -_gcc=-fno-inline-small-functions \
+ #
+ sparc_CCUNBOUND	= -Wd,-xsafe=unboundsym
+ i386_CCUNBOUND	=
++arm_CCUNBOUND	=
++aarch64_CCUNBOUND =
+ CCUNBOUND	= $($(MACH)_CCUNBOUND)
+ 
+ #
+@@ -343,12 +365,16 @@ sparc_XARCH=	-m32
+ sparcv9_XARCH=	-m64
+ i386_XARCH=	-m32
+ amd64_XARCH=	-m64 -Ui386 -U__i386
++arm_XARCH=
++aarch64_XARCH=	-xarch=aarch64
+ 
+ # assembler '-xarch' flag.  Different from compiler '-xarch' flag.
+ sparc_AS_XARCH=		-xarch=v8plus
+ sparcv9_AS_XARCH=	-xarch=v9
+ i386_AS_XARCH=
+ amd64_AS_XARCH=		-xarch=amd64 -P -Ui386 -U__i386
++arm_AS_XARCH=
++aarch64_AS_XARCH=
+ 
+ #
+ # These flags define what we need to be 'standalone' i.e. -not- part
+@@ -364,6 +390,8 @@ sparcv9_STAND_FLAGS=	-_gcc=-ffreestanding
+ NO_SIMD=		-_gcc=-mno-mmx -_gcc=-mno-sse
+ i386_STAND_FLAGS=	-_gcc=-ffreestanding $(NO_SIMD)
+ amd64_STAND_FLAGS=	-xmodel=kernel $(NO_SIMD)
++arm_STAND_FLAGS=	-_gcc=-ffreestanding
++aarch64_STAND_FLAGS=	-_gcc=-ffreestanding
+ 
+ SAVEARGS=		-Wu,-save_args
+ amd64_STAND_FLAGS	+= $(SAVEARGS)
+@@ -417,17 +445,23 @@ sparcv9_CFLAGS=	$(sparcv9_XARCH) -dalign $(CCVERBOSE) $(V9ABIWARN) $(CCREGSYM) \
+ 		$(CCSTATICSYM)
+ i386_CFLAGS=	$(i386_XARCH)
+ amd64_CFLAGS=	$(amd64_XARCH)
++arm_CFLAGS=	$(arm_XARCH)
++aarch64_CFLAGS=	$(aarch64_XARCH)
+ 
+ sparc_ASFLAGS=	$(sparc_AS_XARCH)
+ sparcv9_ASFLAGS=$(sparcv9_AS_XARCH)
+ i386_ASFLAGS=	$(i386_AS_XARCH)
+ amd64_ASFLAGS=	$(amd64_AS_XARCH)
++arm_ASFLAGS=	$(arm_AS_XARCH)
++aarch64_ASFLAGS=$(aarch64_AS_XARCH)
+ 
+ #
+ sparc_COPTFLAG=		-xO3
+ sparcv9_COPTFLAG=	-xO3
+ i386_COPTFLAG=		-O
+ amd64_COPTFLAG=		-xO3
++arm_COPTFLAG=		-xO3
++aarch64_COPTFLAG=	# internal compiler errors at any optimisation level
+ 
+ COPTFLAG= $($(MACH)_COPTFLAG)
+ COPTFLAG64= $($(MACH64)_COPTFLAG)
+@@ -460,6 +494,8 @@ DEBUGFORMAT=	-xdebugformat=stabs
+ #
+ CTF_FLAGS_sparc	= -g -Wc,-Qiselect-T1 $(C99MODE) $(CNOGLOBAL) $(CDWARFSTR)
+ CTF_FLAGS_i386	= -g $(C99MODE) $(CNOGLOBAL) $(CDWARFSTR)
++CTF_FLAGS_arm	= -g $(C99MODE) $(CNOGLOBAL) $(CDWARFSTR)
++CTF_FLAGS_aarch64 = -g $(C99MODE) $(CNOGLOBAL) $(CDWARFSTR)
+ 
+ CTF_FLAGS_sparcv9	= $(CTF_FLAGS_sparc)
+ CTF_FLAGS_amd64		= $(CTF_FLAGS_i386)
+@@ -491,6 +527,8 @@ sparc_SPACEFLAG		= -xspace -W0,-Lt
+ sparcv9_SPACEFLAG	= -xspace -W0,-Lt
+ i386_SPACEFLAG		= -xspace
+ amd64_SPACEFLAG		=
++arm_SPACEFLAG		=
++aarch64_SPACEFLAG	=
+ 
+ SPACEFLAG		= $($(MACH)_SPACEFLAG)
+ SPACEFLAG64		= $($(MACH64)_SPACEFLAG)
+@@ -504,6 +542,8 @@ sparc_IROPTFLAG		= -W2,-xwrap_int
+ sparcv9_IROPTFLAG	= -W2,-xwrap_int
+ i386_IROPTFLAG		=
+ amd64_IROPTFLAG		=
++arm_IROPTFLAG		=
++aarch64_IROPTFLAG	=
+ 
+ IROPTFLAG		= $($(MACH)_IROPTFLAG)
+ IROPTFLAG64		= $($(MACH64)_IROPTFLAG)
+@@ -512,6 +552,8 @@ sparc_XREGSFLAG		= -xregs=no%appl
+ sparcv9_XREGSFLAG	= -xregs=no%appl
+ i386_XREGSFLAG		=
+ amd64_XREGSFLAG		=
++arm_XREGSFLAG		=
++aarch64_XREGSFLAG	=
+ 
+ XREGSFLAG		= $($(MACH)_XREGSFLAG)
+ XREGSFLAG64		= $($(MACH64)_XREGSFLAG)
+@@ -612,11 +654,15 @@ amd64_CCFLAGS=		$(amd64_XARCH) -compat=5 \
+ 			-Qoption ccfe -messages=no%anachronism \
+ 			-Qoption ccfe -features=no%conststrings \
+ 			$(CCERRWARN)
++arm_CCFLAGS=		$(CCERRWARN)
++aarch64_CCFLAGS=	$(CCERRWARN)
+ 
+ sparc_CCOPTFLAG=	-O
+ sparcv9_CCOPTFLAG=	-O
+ i386_CCOPTFLAG=		-O
+ amd64_CCOPTFLAG=	-O
++arm_CCOPTFLAG=		-O
++aarch64_CCOPTFLAG=	-O
+ 
+ CCOPTFLAG=	$($(MACH)_CCOPTFLAG)
+ CCOPTFLAG64=	$($(MACH64)_CCOPTFLAG)
+@@ -659,6 +705,8 @@ $(__GNUC64)MAPFILE.NGB_i386= \
+ MAPFILE.NGB_amd64=	$(SRC)/common/mapfiles/gen/amd64_cc_map.noexeglobs
+ $(__GNUC64)MAPFILE.NGB_amd64= \
+ 			$(SRC)/common/mapfiles/gen/amd64_gcc_map.noexeglobs
++MAPFILE.NGB_arm=	$(SRC)/common/mapfiles/gen/arm_gcc_map.noexeglobs
++MAPFILE.NGB_aarch64=	$(SRC)/common/mapfiles/gen/aarch64_gcc_map.noexeglobs
+ MAPFILE.NGB =		$(MAPFILE.NGB_$(MACH))
+ 
+ #
+@@ -769,7 +817,14 @@ NATIVE_MACH=	$(MACH:amd64=i386)
+ #
+ SPRO_ROOT=		$(BUILD_TOOLS)/SUNWspro
+ SPRO_VROOT=		$(SPRO_ROOT)/SS12
+-GNU_ROOT=		/usr
++
++i386_GNU_ROOT=		/usr
++sparc_GNU_ROOT=		/usr
++arm_GNU_ROOT=		/usr
++aarch64_GNU_ROOT=	/usr
++
++GNU_ROOT=		$($(MACH)_GNU_ROOT)
++NATIVE_GNU_ROOT=	$($(NATIVE_MACH)_GNU_ROOT)
+ 
+ # Till SS12u1 formally becomes the NV CBE, LINT is hard
+ # coded to be picked up from the $SPRO_ROOT/sunstudio12.1/
+@@ -781,42 +836,68 @@ GNU_ROOT=		/usr
+ # Specify platform compiler versions for languages
+ # that we use (currently only c and c++).
+ #
+-sparc_CC=		$(ONBLD_TOOLS)/bin/$(MACH)/cw -_cc
+-$(__GNUC)sparc_CC=	$(ONBLD_TOOLS)/bin/$(MACH)/cw -_gcc
+-sparc_CCC=		$(ONBLD_TOOLS)/bin/$(MACH)/cw -_CC
+-$(__GNUC)sparc_CCC=	$(ONBLD_TOOLS)/bin/$(MACH)/cw -_g++
++sparc_CC=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.sparc -_cc
++$(__GNUC)sparc_CC=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.sparc -_gcc
++sparc_CCC=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.sparc -_CC
++$(__GNUC)sparc_CCC=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.sparc -_g++
+ sparc_CPP=		/usr/ccs/lib/cpp
+ sparc_AS=		/usr/ccs/bin/as -xregsym=no
+ sparc_LD=		/usr/ccs/bin/ld
+ sparc_LINT=		$(SPRO_ROOT)/sunstudio12.1/bin/lint
++sparc_CTFCONVERT=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/ctfconvert.sparc
++sparc_CTFMERGE=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/ctfmerge.sparc
+ 
+-sparcv9_CC=		$(ONBLD_TOOLS)/bin/$(MACH)/cw -_cc
+-$(__GNUC64)sparcv9_CC=	$(ONBLD_TOOLS)/bin/$(MACH)/cw -_gcc
+-sparcv9_CCC=		$(ONBLD_TOOLS)/bin/$(MACH)/cw -_CC
+-$(__GNUC64)sparcv9_CCC=	$(ONBLD_TOOLS)/bin/$(MACH)/cw -_g++
++sparcv9_CC=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.sparc -_cc
++$(__GNUC64)sparcv9_CC=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.sparc -_gcc
++sparcv9_CCC=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.sparc -_CC
++$(__GNUC64)sparcv9_CCC=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.sparc -_g++
+ sparcv9_CPP=		/usr/ccs/lib/cpp
+ sparcv9_AS=		/usr/ccs/bin/as -xregsym=no
+ sparcv9_LD=		/usr/ccs/bin/ld
+ sparcv9_LINT=		$(SPRO_ROOT)/sunstudio12.1/bin/lint
++sparcv9_CTFCONVERT=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/ctfconvert.sparc
++sparcv9_CTFMERGE=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/ctfmerge.sparc
+ 
+-i386_CC=		$(ONBLD_TOOLS)/bin/$(MACH)/cw -_cc
+-$(__GNUC)i386_CC=	$(ONBLD_TOOLS)/bin/$(MACH)/cw -_gcc
+-i386_CCC=		$(ONBLD_TOOLS)/bin/$(MACH)/cw -_CC
+-$(__GNUC)i386_CCC=	$(ONBLD_TOOLS)/bin/$(MACH)/cw -_g++
++i386_CC=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.i386 -_cc
++$(__GNUC)i386_CC=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.i386 -_gcc
++i386_CCC=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.i386 -_CC
++$(__GNUC)i386_CCC=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.i386 -_g++
+ i386_CPP=		/usr/ccs/lib/cpp
+ i386_AS=		/usr/ccs/bin/as
+-$(__GNUC)i386_AS=	$(ONBLD_TOOLS)/bin/$(MACH)/aw
++$(__GNUC)i386_AS=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/aw.i386
+ i386_LD=		/usr/ccs/bin/ld
+ i386_LINT=		$(SPRO_ROOT)/sunstudio12.1/bin/lint
++i386_CTFCONVERT=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/ctfconvert.i386
++i386_CTFMERGE=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/ctfmerge.i386
+ 
+-amd64_CC=		$(ONBLD_TOOLS)/bin/$(MACH)/cw -_cc
+-$(__GNUC64)amd64_CC=	$(ONBLD_TOOLS)/bin/$(MACH)/cw -_gcc
+-amd64_CCC=		$(ONBLD_TOOLS)/bin/$(MACH)/cw -_CC
+-$(__GNUC64)amd64_CCC=	$(ONBLD_TOOLS)/bin/$(MACH)/cw -_g++
++amd64_CC=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.i386 -_cc
++$(__GNUC64)amd64_CC=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.i386 -_gcc
++amd64_CCC=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.i386 -_CC
++$(__GNUC64)amd64_CCC=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.i386 -_g++
+ amd64_CPP=		/usr/ccs/lib/cpp
+-amd64_AS=		$(ONBLD_TOOLS)/bin/$(MACH)/aw
++amd64_AS=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/aw.i386
+ amd64_LD=		/usr/ccs/bin/ld
+ amd64_LINT=		$(SPRO_ROOT)/sunstudio12.1/bin/lint
++amd64_CTFCONVERT=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/ctfconvert.i386
++amd64_CTFMERGE=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/ctfmerge.i386
++
++arm_CC=			$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.arm -_gcc
++arm_CCC=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.arm -_g++
++arm_CPP=		/usr/ccs/lib/cpp
++arm_AS=			$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/aw.arm
++arm_LD=			/opt/armtc/usr/bin/ld
++arm_LINT=		/bin/false
++arm_CTFCONVERT=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/ctfconvert.arm
++arm_CTFMERGE=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/ctfmerge.arm
++
++aarch64_CC=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.aarch64 -_gcc
++aarch64_CCC=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.aarch64 -_g++
++aarch64_CPP=		/usr/ccs/lib/cpp
++aarch64_AS=		$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/aw.aarch64
++aarch64_LD=		/opt/armtc/usr/bin/ld
++aarch64_LINT=		/bin/false
++aarch64_CTFCONVERT=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/ctfconvert.arm
++aarch64_CTFMERGE=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/ctfmerge.arm
+ 
+ NATIVECC=		$($(NATIVE_MACH)_CC)
+ NATIVECCC=		$($(NATIVE_MACH)_CCC)
+@@ -824,16 +905,20 @@ NATIVECPP=		$($(NATIVE_MACH)_CPP)
+ NATIVEAS=		$($(NATIVE_MACH)_AS)
+ NATIVELD=		$($(NATIVE_MACH)_LD)
+ NATIVELINT=		$($(NATIVE_MACH)_LINT)
++NATIVECTFCONVERT=	$($(NATIVE_MACH)_CTFCONVERT)
++NATIVECTFMERGE=		$($(NATIVE_MACH)_CTFMERGE)
+ 
+ #
+ # Makefile.master.64 overrides these settings
+ #
+-CC=			$(NATIVECC)
+-CCC=			$(NATIVECCC)
+-CPP=			$(NATIVECPP)
+-AS=			$(NATIVEAS)
+-LD=			$(NATIVELD)
+-LINT=			$(NATIVELINT)
++CC=			$($(MACH)_CC)
++CCC=			$($(MACH)_CCC)
++CPP=			$($(MACH)_CPP)
++AS=			$($(MACH)_AS)
++LD=			$($(MACH)_LD)
++LINT=			$($(MACH)_LINT)
++CTFCONVERT=		$($(MACH)_CTFCONVERT)
++CTFMERGE=		$($(MACH)_CTFMERGE)
+ 
+ # The real compilers used for this build
+ CW_CC_CMD=		$(CC) -_compiler
+@@ -883,6 +968,8 @@ sparc_C_PICFLAGS =	-K pic
+ sparcv9_C_PICFLAGS =	-K pic
+ i386_C_PICFLAGS =	-K pic
+ amd64_C_PICFLAGS =	-K pic
++arm_C_PICFLAGS =	-K pic
++aarch64_C_PICFLAGS =	-K pic
+ C_PICFLAGS =		$($(MACH)_C_PICFLAGS)
+ C_PICFLAGS64 =		$($(MACH64)_C_PICFLAGS)
+ 
+@@ -890,6 +977,8 @@ sparc_C_BIGPICFLAGS =	-K PIC
+ sparcv9_C_BIGPICFLAGS =	-K PIC
+ i386_C_BIGPICFLAGS =	-K PIC
+ amd64_C_BIGPICFLAGS =	-K PIC
++arm_C_BIGPICFLAGS =	-K PIC
++aarch64_C_BIGPICFLAGS =	-K PIC
+ C_BIGPICFLAGS =		$($(MACH)_C_BIGPICFLAGS)
+ C_BIGPICFLAGS64 =	$($(MACH64)_C_BIGPICFLAGS)
+ 
+@@ -898,6 +987,7 @@ sparc_CC_PICFLAGS =	-Kpic
+ sparcv9_CC_PICFLAGS =	-KPIC
+ i386_CC_PICFLAGS = 	-Kpic
+ amd64_CC_PICFLAGS = 	-Kpic
++aarch64_CC_PICFLAGS =	-Kpic
+ CC_PICFLAGS =		$($(MACH)_CC_PICFLAGS)
+ CC_PICFLAGS64 =		$($(MACH64)_CC_PICFLAGS)
+ 
+@@ -992,7 +1082,7 @@ POST_PROCESS=		$(PROCESS_COMMENT) $@ ; $(STRIP_STABS) ; \
+ # ELF section size which can trigger an OBP bug on older platforms.
+ # This problem affects only specific sun4u bootable modules.
+ #
+-CHK4UBIN=	$(ONBLD_TOOLS)/bin/$(MACH)/chk4ubin
++CHK4UBIN=	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/chk4ubin
+ CHK4UBINFLAGS=
+ CHK4UBINARY=	$(CHK4UBIN) $(CHK4UBINFLAGS) $@
+ 
+diff --git a/usr/src/Makefile.master.64 b/usr/src/Makefile.master.64
+index f671406..5b29e44 100644
+--- a/usr/src/Makefile.master.64
++++ b/usr/src/Makefile.master.64
+@@ -62,6 +62,8 @@ CPP=		$($(MACH64)_CPP)
+ AS=		$($(MACH64)_AS)
+ LD=		$($(MACH64)_LD)
+ LINT=		$($(MACH64)_LINT)
++CTFCONVERT=	$($(MACH64)_CTFCONVERT)
++CTFMERGE=	$($(MACH64)_CTFMERGE)
+ 
+ REAL_CC=	$(CW_CC_CMD:sh)
+ REAL_CCC=	$(CW_CCC_CMD:sh)
+diff --git a/usr/src/cmd/avs/errgen/Makefile b/usr/src/cmd/avs/errgen/Makefile
+index afd5db1..dbf39ad 100644
+--- a/usr/src/cmd/avs/errgen/Makefile
++++ b/usr/src/cmd/avs/errgen/Makefile
+@@ -49,7 +49,11 @@ clean:
+ 	$(RM) $(OBJS)
+ 
+ $(PROG):	$(OBJS)
+-	$(NATIVECC) $(CFLAGS) $(OBJS) -o $@
++	$(NATIVECC) $(NATIVE_CFLAGS) $(OBJS) -o $@
+ 	$(POST_PROCESS)
+ 
++%.o: %.c
++	$(NATIVECC) $(NATIVE_CFLAGS) $(CPPFLAGS.native) -o $@ -c $<
++	$(POST_PROCESS_O)
++
+ include	../../Makefile.targ
+diff --git a/usr/src/cmd/dis/dis_main.c b/usr/src/cmd/dis/dis_main.c
+index 2886f41..3aea551 100644
+--- a/usr/src/cmd/dis/dis_main.c
++++ b/usr/src/cmd/dis/dis_main.c
+@@ -579,6 +579,14 @@ dis_file(const char *filename)
+ 			}
+ 			break;
+ 
++		case EM_ARM:
++			g_flags |= DIS_ARM;
++			break;
++
++		case EM_AARCH64:
++			g_flags |= DIS_AARCH64;
++			break;
++
+ 		default:
+ 			die("%s: unsupported ELF machine 0x%x", filename,
+ 			    ehdr.e_machine);
+diff --git a/usr/src/cmd/file/file.c b/usr/src/cmd/file/file.c
+index 6c7989d..0a49f5b 100644
+--- a/usr/src/cmd/file/file.c
++++ b/usr/src/cmd/file/file.c
+@@ -1074,10 +1074,11 @@ print_elf_machine(int machine)
+ 		"picoJava",			/* 91 - EM_PJ */
+ 		"OpenRISC",			/* 92 - EM_OPENRISC */
+ 		"Tangent-A5",			/* 93 - EM_ARC_A5 */
+-		"Xtensa"			/* 94 - EM_XTENSA */
++		"Xtensa",			/* 94 - EM_XTENSA */
++		"aarch64",			/* 95 - EM_AARCH64 */
+ 	};
+ 	/* If new machine is added, refuse to compile until we're updated */
+-#if EM_NUM != 95
++#if EM_NUM != 96
+ #error "Number of known ELF machine constants has changed"
+ #endif
+ 
+diff --git a/usr/src/cmd/mdb/common/mdb/mdb_disasm.c b/usr/src/cmd/mdb/common/mdb/mdb_disasm.c
+index 47788bf..2a06664 100644
+--- a/usr/src/cmd/mdb/common/mdb/mdb_disasm.c
++++ b/usr/src/cmd/mdb/common/mdb/mdb_disasm.c
+@@ -419,7 +419,6 @@ libdisasm_create(mdb_disasm_t *dp, const char *name,
+ 	return (0);
+ }
+ 
+-#if defined(__i386) || defined(__amd64)
+ static int
+ ia16_create(mdb_disasm_t *dp)
+ {
+@@ -437,9 +436,7 @@ ia32_create(mdb_disasm_t *dp)
+ 	    "Intel 32-bit disassembler",
+ 	    DIS_X86_SIZE32));
+ }
+-#endif
+ 
+-#if defined(__amd64)
+ static int
+ amd64_create(mdb_disasm_t *dp)
+ {
+@@ -448,9 +445,7 @@ amd64_create(mdb_disasm_t *dp)
+ 	    "AMD64 and IA32e 64-bit disassembler",
+ 	    DIS_X86_SIZE64));
+ }
+-#endif
+ 
+-#if defined(__sparc)
+ static int
+ sparc1_create(mdb_disasm_t *dp)
+ {
+@@ -504,7 +499,15 @@ sparcv9plus_create(mdb_disasm_t *dp)
+ 	    "UltraSPARC1-v9 disassembler",
+ 	    DIS_SPARC_V9 | DIS_SPARC_V9_SGI));
+ }
+-#endif
++
++static int
++arm_create(mdb_disasm_t *dp)
++{
++	return (libdisasm_create(dp,
++	    "arm",
++	    "ARM disassembler",
++	    DIS_ARM));
++}
+ 
+ /*ARGSUSED*/
+ static void
+@@ -556,20 +559,17 @@ defdis_create(mdb_disasm_t *dp)
+ 
+ mdb_dis_ctor_f *const mdb_dis_builtins[] = {
+ 	defdis_create,
+-#if defined(__amd64)
+ 	ia16_create,
+ 	ia32_create,
+ 	amd64_create,
+-#elif defined(__i386)
+ 	ia16_create,
+ 	ia32_create,
+-#elif defined(__sparc)
+ 	sparc1_create,
+ 	sparc2_create,
+ 	sparc4_create,
+ 	sparcv8_create,
+ 	sparcv9_create,
+ 	sparcv9plus_create,
+-#endif
++	arm_create,
+ 	NULL
+ };
+diff --git a/usr/src/cmd/sgs/Makefile b/usr/src/cmd/sgs/Makefile
+index 6dfa9f9..6b102f9 100644
+--- a/usr/src/cmd/sgs/Makefile
++++ b/usr/src/cmd/sgs/Makefile
+@@ -192,6 +192,7 @@ XRDIRS=		. \
+ 		../../head \
+ 		../../uts/common/krtld \
+ 		../../uts/common/sys \
++		../../uts/arm/aarch32/krtld \
+ 		../../uts/sparc/sys \
+ 		../../uts/sparc/krtld \
+ 		../../uts/intel/ia32/krtld \
+diff --git a/usr/src/cmd/sgs/Makefile.var b/usr/src/cmd/sgs/Makefile.var
+index d6452d1..d990f44 100644
+--- a/usr/src/cmd/sgs/Makefile.var
++++ b/usr/src/cmd/sgs/Makefile.var
+@@ -51,6 +51,8 @@
+ #
+ VAR_LINTFLAGS64=	-m64
+ 
++VAR_PLAT_arm=		arm/aarch32
++VAR_PLAT_aarch64=	arm/aarch64
+ VAR_PLAT_sparc=		sparc
+ VAR_PLAT_i386=		intel/ia32
+ VAR_PLAT_amd64=		intel/amd64
+diff --git a/usr/src/cmd/sgs/elfdump/Makefile.com b/usr/src/cmd/sgs/elfdump/Makefile.com
+index b24b9ef..49235c8 100644
+--- a/usr/src/cmd/sgs/elfdump/Makefile.com
++++ b/usr/src/cmd/sgs/elfdump/Makefile.com
+@@ -31,6 +31,7 @@ include		$(SRC)/cmd/sgs/Makefile.com
+ COMOBJ =	main.o			corenote.o \
+ 		dwarf.o			struct_layout.o \
+ 		struct_layout_i386.o 	struct_layout_amd64.o \
++		armattrs.o \
+ 		struct_layout_sparc.o 	struct_layout_sparcv9.o
+ 
+ COMOBJ32 =	elfdump32.o fake_shdr32.o
+diff --git a/usr/src/cmd/sgs/elfdump/common/_elfdump.h b/usr/src/cmd/sgs/elfdump/common/_elfdump.h
+index db6f158..0610bd1 100644
+--- a/usr/src/cmd/sgs/elfdump/common/_elfdump.h
++++ b/usr/src/cmd/sgs/elfdump/common/_elfdump.h
+@@ -70,6 +70,7 @@ extern "C" {
+ #define	FLG_SHOW_CAP		0x00004000
+ #define	FLG_SHOW_UNWIND		0x00008000
+ #define	FLG_SHOW_SORT		0x00010000
++#define	FLG_SHOW_ATTRIBUTES	0x00020000
+ 
+ #define	FLG_CTL_LONGNAME	0x01000000
+ #define	FLG_CTL_DEMANGLE	0x02000000
+@@ -225,6 +226,7 @@ typedef enum {
+ extern	corenote_ret_t	corenote(Half, int, Word, const char *, Word);
+ extern	void	dump_eh_frame(const char *, char *, uchar_t *, size_t, uint64_t,
+ 		    Half e_machine, uchar_t *e_ident, uint64_t gotaddr);
++extern	void	dump_arm_attributes(Cache *, Word, int);
+ extern	void	dump_hex_bytes(const void *, size_t, int, int, int);
+ 
+ extern	int	fake_shdr_cache32(const char *, int, Elf *, Elf32_Ehdr *,
+diff --git a/usr/src/cmd/sgs/elfdump/common/elfdump.c b/usr/src/cmd/sgs/elfdump/common/elfdump.c
+index 6f7c8e2..2cdb073 100644
+--- a/usr/src/cmd/sgs/elfdump/common/elfdump.c
++++ b/usr/src/cmd/sgs/elfdump/common/elfdump.c
+@@ -33,6 +33,7 @@
+  */
+ #include	<stddef.h>
+ #include	<sys/elf_386.h>
++#include	<sys/elf_ARM.h>
+ #include	<sys/elf_amd64.h>
+ #include	<sys/elf_SPARC.h>
+ #include	<_libelf.h>
+@@ -2729,6 +2730,17 @@ reloc(Cache *cache, Word shnum, Ehdr *ehdr, const char *file)
+ 					if ((reltype != R_AMD64_NONE) &&
+ 					    (reltype != R_AMD64_RELATIVE))
+ 						badrel++;
++				} else if (mach == EM_ARM) {
++					/*
++					 * AEABI 4.6.1.8 talks of
++					 * BASE_PREL/BASE_ABS also being
++					 * valid
++					 */
++					if ((reltype != R_ARM_NONE) &&
++					    (reltype != R_ARM_RELATIVE) &&
++					    (reltype != R_ARM_BASE_PREL) &&
++					    (reltype != R_ARM_BASE_ABS))
++						badrel++;
+ 				}
+ 
+ 				if (badrel) {
+@@ -5219,6 +5231,10 @@ regular(const char *file, int fd, Elf *elf, uint_t flags,
+ 			case SHT_AMD64_UNWIND:
+ 				flags |= FLG_SHOW_UNWIND;
+ 				break;
++
++			case SHT_ARM_ATTRIBUTES:
++				flags |= FLG_SHOW_ATTRIBUTES;
++				break;
+ 			}
+ 		}
+ 	}
+@@ -5302,6 +5318,9 @@ regular(const char *file, int fd, Elf *elf, uint_t flags,
+ 	    ((osabi == ELFOSABI_SOLARIS) || (osabi == ELFOSABI_LINUX)))
+ 		unwind(cache, shnum, phnum, ehdr, osabi, file, elf, flags);
+ 
++	if ((flags & FLG_SHOW_ATTRIBUTES) && (ehdr->e_machine == EM_ARM))
++		dump_arm_attributes(cache, shnum,
++		    _elf_sys_encoding() != ehdr->e_ident[EI_DATA]);
+ 
+ 	/* Release the memory used to cache section headers */
+ done:
+diff --git a/usr/src/cmd/sgs/elfdump/common/elfdump.msg b/usr/src/cmd/sgs/elfdump/common/elfdump.msg
+index e7488d5..6ab5e08 100644
+--- a/usr/src/cmd/sgs/elfdump/common/elfdump.msg
++++ b/usr/src/cmd/sgs/elfdump/common/elfdump.msg
+@@ -35,6 +35,7 @@
+ @ MSG_USAGE_BRIEF	"usage: %s [-cCdegGhHiklmnrSsuvy] [-I index] \
+ 			 [-N name] [-O osabi] [-T type] [-p | -w outfile] \
+ 			 file...\n"
++@ MSG_USAGE_DETAIL0	"\t[-a]\t\tdump the contents of ARM attributes sections\n"
+ @ MSG_USAGE_DETAIL1	"\t[-c]\t\tdump section header information\n"
+ @ MSG_USAGE_DETAIL2	"\t[-C]\t\tdemangle C++ symbol names\n"
+ @ MSG_USAGE_DETAIL3	"\t[-d]\t\tdump the contents of the .dynamic section\n"
+@@ -223,6 +224,7 @@
+ @ MSG_ELF_SCN_MOVE	"Move Section:  %s"
+ @ MSG_ELF_SCN_SYMSORT1	"Symbol Sort Section:  %s (%s)"
+ @ MSG_ELF_SCN_SYMSORT2	"Symbol Sort Section:  %s (%s / %s)"
++@ MSG_ELF_SCN_ARMATTRS	"ARM Attributes: %s"
+ 
+ @ MSG_OBJ_CAP_TITLE	" Object Capabilities:"
+ @ MSG_SYM_CAP_TITLE	" Symbol Capabilities:"
+@@ -313,6 +315,19 @@
+ 
+ @ MSG_NOTE_BAD_SECFLAGS_VER	"unknown prsecflags_t version: "
+ 
++#
++# SHT_ARM_ATTRIBUTES messages
++#
++@ MSG_ARM_ATTR_VALUE		"      %-35s\tvalue: %u"
++@ MSG_ARM_ATTR_STRVALUE		"      %-35s\tvalue: %s"
++@ MSG_ARM_ATTR_VENDOR		"    vendor: %s\t\tsize: %u"
++@ MSG_ARM_ATTR_INVAL_SEC	"    Invalid AEABI section"
++@ MSG_ARM_ATTR_TAG		"    %s\t\tsize: %u"
++@ MSG_ARM_ATTR_SYMBOL_SPEC	"    symbol specifier: %u"
++@ MSG_ARM_ATTR_SECT_SPEC	"    section specifier: %u"
++@ MSG_ARM_ATTR_VERSION		"  version: %c%s"
++@ MSG_ARM_ATTR_UNSUPPORTED	" [UNSUPPORTED]"
++
+ @ _END_
+ 
+ # The following strings represent reserved words, files, pathnames and symbols.
+@@ -350,7 +365,7 @@
+ @ MSG_SYM_FINI		"_fini"
+ @ MSG_SYM_GOT		"_GLOBAL_OFFSET_TABLE_"
+ 
+-@ MSG_STR_OPTIONS	"CcdeGgHhiI:klmN:nO:PprSsT:uvw:y"
++@ MSG_STR_OPTIONS	"aCcdeGgHhiI:klmN:nO:PprSsT:uvw:y"
+ 
+ @ MSG_STR_8SP		"        "
+ @ MSG_STR_EMPTY		""
+@@ -666,3 +681,5 @@
+ @ MSG_PHDRNAM_TLSSORT		".SUNW_tlssort(phdr)"
+ @ MSG_PHDRNAM_UNWIND		".eh_frame_hdr(phdr)"
+ @ MSG_PHDRNAM_VER		".SUNW_version(phdr)"
++
++@ MSG_ARM_ATTR_AEABI	"aeabi"
+diff --git a/usr/src/cmd/sgs/elfdump/common/main.c b/usr/src/cmd/sgs/elfdump/common/main.c
+index b35da26..2aa5eb1 100644
+--- a/usr/src/cmd/sgs/elfdump/common/main.c
++++ b/usr/src/cmd/sgs/elfdump/common/main.c
+@@ -127,6 +127,7 @@ failure(const char *file, const char *func)
+ static void
+ detail_usage()
+ {
++	(void) fprintf(stderr, MSG_INTL(MSG_USAGE_DETAIL0));
+ 	(void) fprintf(stderr, MSG_INTL(MSG_USAGE_DETAIL1));
+ 	(void) fprintf(stderr, MSG_INTL(MSG_USAGE_DETAIL2));
+ 	(void) fprintf(stderr, MSG_INTL(MSG_USAGE_DETAIL3));
+@@ -752,6 +753,9 @@ main(int argc, char **argv, char **envp)
+ 	opterr = 0;
+ 	while ((var = getopt(argc, argv, MSG_ORIG(MSG_STR_OPTIONS))) != EOF) {
+ 		switch (var) {
++		case 'a':
++			flags |= FLG_SHOW_ATTRIBUTES;
++			break;
+ 		case 'C':
+ 			flags |= FLG_CTL_DEMANGLE;
+ 			break;
+diff --git a/usr/src/cmd/sgs/elfedit/modules/Makefile b/usr/src/cmd/sgs/elfedit/modules/Makefile
+index 8643152..e963936 100644
+--- a/usr/src/cmd/sgs/elfedit/modules/Makefile
++++ b/usr/src/cmd/sgs/elfedit/modules/Makefile
+@@ -19,16 +19,14 @@
+ # CDDL HEADER END
+ #
+ #
+-# ident	"%Z%%M%	%I%	%E% SMI"
+-#
+ # Copyright 2007 Sun Microsystems, Inc.  All rights reserved.
+ # Use is subject to license terms.
+ #
+ 
+ include		$(SRC)/Makefile.master
+ 
+-
+-SUBDIRS=	$(MACH)
++SUBDIRS=		$(MACH)
++$(BUILD64)SUBDIRS +=	$(MACH64)
+ 
+ all:=		TARGET=	all
+ chkmsg:=	TARGET=	chkmsg
+@@ -46,9 +44,5 @@ package all chkmsg catalog clean clobber lint install: \
+ 
+ $(SUBDIRS):	FRC
+ 		@cd $@; pwd; $(MAKE) $(TARGET)
+-		@if [ -d $(MACH64) ]; then                      \
+-			cd $(MACH64); pwd; $(MAKE) $(TARGET);   \
+-		else /bin/true; fi
+-
+ 
+ FRC:
+diff --git a/usr/src/cmd/sgs/elfwrap/Makefile.com b/usr/src/cmd/sgs/elfwrap/Makefile.com
+index 0236d7a..c517137 100644
+--- a/usr/src/cmd/sgs/elfwrap/Makefile.com
++++ b/usr/src/cmd/sgs/elfwrap/Makefile.com
+@@ -32,7 +32,8 @@ include		$(SRC)/cmd/sgs/Makefile.com
+ COMOBJ =	main.o
+ 
+ MACHOBJ =	machine.sparc.o	machine.sparcv9.o \
+-		machine.i386.o	machine.amd64.o
++		machine.i386.o	machine.amd64.o \
++		machine.arm.o
+ 
+ COMOBJ32 =	elfwrap32.o
+ 
+diff --git a/usr/src/cmd/sgs/elfwrap/Makefile.targ b/usr/src/cmd/sgs/elfwrap/Makefile.targ
+index 26b0b71..7c347e2 100644
+--- a/usr/src/cmd/sgs/elfwrap/Makefile.targ
++++ b/usr/src/cmd/sgs/elfwrap/Makefile.targ
+@@ -23,8 +23,6 @@
+ # Copyright 2008 Sun Microsystems, Inc.  All rights reserved.
+ # Use is subject to license terms.
+ #
+-# ident	"%Z%%M%	%I%	%E% SMI"
+-#
+ 
+ %.o:		../common/%.c
+ 		$(COMPILE.c) -o $@ $<
+@@ -58,6 +56,10 @@
+ 		$(COMPILE.c) -DELFWRAP_X86 -D_ELF64 -o $@ $<
+ 		$(POST_PROCESS_O)
+ 
++%.arm.o:	../common/%.c
++		$(COMPILE.c) -DELFWRAP_ARM -o $@ $<
++		$(POST_PROCESS_O)
++
+ $(PROG):	$(OBJS) $(MAPFILES)
+ 		$(LINK.c) -o $@ $(OBJS) $(LDLIBS)
+ 		$(POST_PROCESS)
+diff --git a/usr/src/cmd/sgs/elfwrap/common/_elfwrap.h b/usr/src/cmd/sgs/elfwrap/common/_elfwrap.h
+index b53ffcf..378ef7c 100644
+--- a/usr/src/cmd/sgs/elfwrap/common/_elfwrap.h
++++ b/usr/src/cmd/sgs/elfwrap/common/_elfwrap.h
+@@ -27,8 +27,6 @@
+ #ifndef	__ELFWRAP_H
+ #define	__ELFWRAP_H
+ 
+-#pragma ident	"%Z%%M%	%I%	%E% SMI"
+-
+ /*
+  * Local include file for elfwrap.
+  */
+@@ -99,6 +97,7 @@ extern	void	target_init_sparc(TargDesc_t *);
+ extern	void	target_init_sparcv9(TargDesc_t *);
+ extern	void	target_init_i386(TargDesc_t *);
+ extern	void	target_init_amd64(TargDesc_t *);
++extern	void	target_init_arm(TargDesc_t *);
+ #endif
+ 
+ #ifdef	__cplusplus
+diff --git a/usr/src/cmd/sgs/elfwrap/common/elfwrap.c b/usr/src/cmd/sgs/elfwrap/common/elfwrap.c
+index ef5a482..fdf9b80 100644
+--- a/usr/src/cmd/sgs/elfwrap/common/elfwrap.c
++++ b/usr/src/cmd/sgs/elfwrap/common/elfwrap.c
+@@ -23,7 +23,6 @@
+  * Copyright 2008 Sun Microsystems, Inc.  All rights reserved.
+  * Use is subject to license terms.
+  */
+-#pragma ident	"%Z%%M%	%I%	%E% SMI"
+ 
+ #include	<sys/types.h>
+ #include	<sys/stat.h>
+@@ -244,6 +243,9 @@ output(const char *prog, int fd, const char *ofile, ushort_t mach,
+ 		case EM_AMD64:
+ 			target_init_amd64(&tdesc);
+ 			break;
++		case EM_ARM:
++			target_init_arm(&tdesc);
++			break;
+ #else
+ 		default:
+ 			target_init(&tdesc);
+diff --git a/usr/src/cmd/sgs/elfwrap/common/elfwrap.msg b/usr/src/cmd/sgs/elfwrap/common/elfwrap.msg
+index 2d68fab..0fdc8ec 100644
+--- a/usr/src/cmd/sgs/elfwrap/common/elfwrap.msg
++++ b/usr/src/cmd/sgs/elfwrap/common/elfwrap.msg
+@@ -23,8 +23,6 @@
+ # Copyright 2008 Sun Microsystems, Inc.  All rights reserved.
+ # Use is subject to license terms.
+ #
+-# ident	"%Z%%M%	%I%	%E% SMI"
+-#
+ 
+ @ _START_
+ 
+@@ -76,6 +74,7 @@
+ 
+ @ MSG_TARG_SPARC	"sparc"
+ @ MSG_TARG_X86		"x86"
++@ MSG_TARG_ARM		"arm"
+ 
+ @ MSG_STR_AWRAPO	"a.wrap.o"
+ @ MSG_STR_EMPTY		""
+diff --git a/usr/src/cmd/sgs/elfwrap/common/machine.c b/usr/src/cmd/sgs/elfwrap/common/machine.c
+index 73cc1fc..1606a21 100644
+--- a/usr/src/cmd/sgs/elfwrap/common/machine.c
++++ b/usr/src/cmd/sgs/elfwrap/common/machine.c
+@@ -23,7 +23,6 @@
+  * Copyright 2008 Sun Microsystems, Inc.  All rights reserved.
+  * Use is subject to license terms.
+  */
+-#pragma ident	"%Z%%M%	%I%	%E% SMI"
+ 
+ #include	<_elfwrap.h>
+ 
+@@ -46,6 +45,10 @@
+ #define	target_init	target_init_sparc
+ #endif
+ #endif
++#if	defined(ELFWRAP_ARM)
++#include	<arm/machdep_arm.h>
++#define	target_init	target_init_arm
++#endif
+ #endif
+ 
+ /*
+diff --git a/usr/src/cmd/sgs/elfwrap/common/main.c b/usr/src/cmd/sgs/elfwrap/common/main.c
+index cda0803..b7c23af 100644
+--- a/usr/src/cmd/sgs/elfwrap/common/main.c
++++ b/usr/src/cmd/sgs/elfwrap/common/main.c
+@@ -23,7 +23,6 @@
+  * Copyright 2008 Sun Microsystems, Inc.  All rights reserved.
+  * Use is subject to license terms.
+  */
+-#pragma ident	"%Z%%M%	%I%	%E% SMI"
+ 
+ /*
+  * Wrap data in an elf file.
+@@ -138,7 +137,9 @@ main(int argc, char **argv, char **envp)
+ 				mach = EM_AMD64;
+ 			else
+ 				mach = EM_386;
+-
++		} else if (strcasecmp(pstr, MSG_ORIG(MSG_TARG_ARM)) == 0) {
++			/* XXXARM: 64 */
++			mach = EM_ARM;
+ 		} else {
+ 			(void) fprintf(stderr, MSG_INTL(MSG_ARG_BADTARG), prog,
+ 			    pstr);
+diff --git a/usr/src/cmd/sgs/include/conv.h b/usr/src/cmd/sgs/include/conv.h
+index 547e069..8fac432 100644
+--- a/usr/src/cmd/sgs/include/conv.h
++++ b/usr/src/cmd/sgs/include/conv.h
+@@ -119,8 +119,8 @@ typedef union {
+ } Conv_inv_buf_t;
+ 
+ /* conv_ehdr_flags() */
+-#define	CONV_EHDR_FLAGS_BUFSIZE		91
+-typedef union {
++#define	CONV_EHDR_FLAGS_BUFSIZE		267
++typedef struct {
+ 	Conv_inv_buf_t			inv_buf;
+ 	char				buf[CONV_EHDR_FLAGS_BUFSIZE];
+ } Conv_ehdr_flags_buf_t;
+@@ -799,6 +799,8 @@ extern	const char	*_conv_map_ds(uchar_t, Half, Conv_elfvalue_t,
+ /*
+  * Generic formatting interfaces.
+  */
++extern	const char	*conv_arm_tag(uint_t, Conv_fmt_flags_t,
++    Conv_inv_buf_t *);
+ extern	const char	*conv_bnd_obj(uint_t, Conv_bnd_obj_buf_t *);
+ extern	const char	*conv_bnd_type(uint_t, Conv_bnd_type_buf_t *);
+ extern	const char	*conv_config_feat(int, Conv_config_feat_buf_t *);
+@@ -913,6 +915,10 @@ extern	const char	*conv_reloc_type(Half, Word, Conv_fmt_flags_t,
+ extern	const char	*conv_reloc_type_static(Half, Word, Conv_fmt_flags_t);
+ extern	const char	*conv_reloc_386_type(Word, Conv_fmt_flags_t,
+ 			    Conv_inv_buf_t *);
++extern	const char	*conv_reloc_aarch64_type(Word, Conv_fmt_flags_t,
++			    Conv_inv_buf_t *);
++extern	const char	*conv_reloc_arm_type(Word, Conv_fmt_flags_t,
++			    Conv_inv_buf_t *);
+ extern	const char	*conv_reloc_amd64_type(Word, Conv_fmt_flags_t,
+ 			    Conv_inv_buf_t *);
+ extern	const char	*conv_reloc_SPARC_type(Word, Conv_fmt_flags_t,
+diff --git a/usr/src/cmd/sgs/include/machdep.h b/usr/src/cmd/sgs/include/machdep.h
+index c62bc0e..3c12695 100644
+--- a/usr/src/cmd/sgs/include/machdep.h
++++ b/usr/src/cmd/sgs/include/machdep.h
+@@ -34,8 +34,6 @@
+ #ifndef	_MACHDEP_H
+ #define	_MACHDEP_H
+ 
+-#pragma ident	"%Z%%M%	%I%	%E% SMI"
+-
+ #if defined(__sparc)
+ 
+ #include <sparc/machdep_sparc.h>
+@@ -44,6 +42,10 @@
+ 
+ #include <i386/machdep_x86.h>
+ 
++#elif defined(__arm)
++
++#include <arm/machdep_arm.h>
++
+ #else
+ 
+ #error "machdep.h does not understand current machine"
+diff --git a/usr/src/cmd/sgs/ld/common/ld.c b/usr/src/cmd/sgs/ld/common/ld.c
+index 794f5e5..c65512d 100644
+--- a/usr/src/cmd/sgs/ld/common/ld.c
++++ b/usr/src/cmd/sgs/ld/common/ld.c
+@@ -334,6 +334,10 @@ getmore:
+ 				    MSG_ORIG(MSG_TARG_X86)) == 0) {
+ 					mach32 = EM_386;
+ 					mach64 = EM_AMD64;
++				} else if (strcasecmp(pstr,
++				    MSG_ORIG(MSG_TARG_ARM)) == 0) {
++					mach32 = EM_ARM;
++					mach64 = EM_NONE;
+ 				} else {
+ 					eprintf(0, ERR_FATAL,
+ 					    MSG_INTL(MSG_ERR_BADTARG), pstr);
+diff --git a/usr/src/cmd/sgs/ld/common/ld.msg b/usr/src/cmd/sgs/ld/common/ld.msg
+index cc3dcd5..6f32606 100644
+--- a/usr/src/cmd/sgs/ld/common/ld.msg
++++ b/usr/src/cmd/sgs/ld/common/ld.msg
+@@ -68,5 +68,6 @@
+ 
+ @ MSG_SUNW_OST_SGS	"SUNW_OST_SGS"
+ 
++@ MSG_TARG_ARM		"arm"
+ @ MSG_TARG_SPARC	"sparc"
+ @ MSG_TARG_X86		"x86"
+diff --git a/usr/src/cmd/sgs/libconv/Makefile.com b/usr/src/cmd/sgs/libconv/Makefile.com
+index d95213e..b5b8379 100644
+--- a/usr/src/cmd/sgs/libconv/Makefile.com
++++ b/usr/src/cmd/sgs/libconv/Makefile.com
+@@ -34,7 +34,7 @@ COMOBJS64 =	cap_machelf64.o		dynamic_machelf64.o \
+ 		symbols_machelf64.o	symbols_sparc_machelf64.o
+ 
+ COMOBJS=	arch.o			audit.o \
+-		c_literal.o \
++		armattrs.o		c_literal.o \
+ 		cap.o			config.o \
+ 		corenote.o 		data.o \
+ 		deftag.o 		demangle.o \
+@@ -42,13 +42,14 @@ COMOBJS=	arch.o			audit.o \
+ 		dwarf_ehe.o 		dynamic.o \
+ 		elf.o			entry.o \
+ 		globals.o		group.o \
+- 		lddstub.o		map.o \
++		lddstub.o		map.o \
+ 		phdr.o			relocate.o \
+- 		relocate_i386.o		relocate_amd64.o \
++		relocate_aarch64.o	relocate_arm.o	\
++		relocate_i386.o		relocate_amd64.o \
+ 		relocate_sparc.o	sections.o \
+ 		segments.o    		strproc.o \
+ 		symbols.o  		syminfo.o \
+-  		tokens.o  		time.o \
++		tokens.o  		time.o \
+ 		version.o
+ 
+ ELFCAP_OBJS=	elfcap.o
+@@ -56,7 +57,7 @@ ELFCAP_OBJS=	elfcap.o
+ ASOBJS=		vernote.o
+ 
+ BLTOBJS=	arch_msg.o		audit_msg.o \
+-		c_literal_msg.o \
++		armattrs_msg.o		c_literal_msg.o \
+ 		cap_msg.o		config_msg.o \
+ 		corenote_msg.o		data_msg.o \
+ 		deftag_msg.o		demangle_msg.o \
+@@ -64,8 +65,9 @@ BLTOBJS=	arch_msg.o		audit_msg.o \
+ 		dwarf_ehe_msg.o 	dynamic_msg.o \
+ 		elf_msg.o 		entry_msg.o \
+ 		globals_msg.o		group_msg.o \
+- 		map_msg.o		lddstub_msg.o \
+-		phdr_msg.o 		relocate_amd64_msg.o \
++		map_msg.o		lddstub_msg.o \
++		phdr_msg.o 		relocate_aarch64_msg.o \
++		relocate_arm_msg.o	relocate_amd64_msg.o \
+ 		relocate_i386_msg.o	relocate_sparc_msg.o \
+ 		sections_msg.o 		segments_msg.o \
+ 		symbols_msg.o 		symbols_sparc_msg.o \
+diff --git a/usr/src/cmd/sgs/libconv/common/elf.c b/usr/src/cmd/sgs/libconv/common/elf.c
+index 0bb40f9..43ba12b 100644
+--- a/usr/src/cmd/sgs/libconv/common/elf.c
++++ b/usr/src/cmd/sgs/libconv/common/elf.c
+@@ -31,6 +31,7 @@
+ #include	"_conv.h"
+ #include	"elf_msg.h"
+ #include	<sys/elf_SPARC.h>
++#include	<sys/elf_ARM.h>
+ 
+ 
+ 
+@@ -316,32 +317,47 @@ ehdr_mach_strings(Conv_fmt_flags_t fmt_flags)
+ 		MSG_EM_OPENRISC_CF,	MSG_EM_ARC_A5_CF,
+ 		MSG_EM_XTENSA_CF
+ 	};
+-#if	(EM_NUM != (EM_XTENSA + 1))
+-#error	"EM_NUM has grown"
+-#endif
+ 	static const conv_ds_msg_t ds_mach_66_94_cf = {
+-	    CONV_DS_MSG_INIT(EM_FX66, mach_66_94_cf) };
++		CONV_DS_MSG_INIT(EM_FX66, mach_66_94_cf) };
+ 	static const conv_ds_msg_t ds_mach_66_94_nf = {
+-	    CONV_DS_MSG_INIT(EM_FX66, mach_66_94_nf) };
++		CONV_DS_MSG_INIT(EM_FX66, mach_66_94_nf) };
+ 	static const conv_ds_msg_t ds_mach_66_94_dmp = {
+-	    CONV_DS_MSG_INIT(EM_FX66, mach_66_94_dmp) };
+-
++		CONV_DS_MSG_INIT(EM_FX66, mach_66_94_dmp) };
++	static const Msg mach_183_cf[] = {
++		MSG_EM_AARCH64_CF,
++	};
++	static const Msg mach_183_nf[] = {
++		MSG_EM_AARCH64_NF,
++	};
++	static const Msg mach_183_dmp[] = {
++		MSG_EM_AARCH64_CF,
++	};
++	static const conv_ds_msg_t ds_mach_183_cf = {
++		CONV_DS_MSG_INIT(EM_AARCH64, mach_183_cf) };
++	static const conv_ds_msg_t ds_mach_183_nf = {
++		CONV_DS_MSG_INIT(EM_AARCH64, mach_183_nf) };
++	static const conv_ds_msg_t ds_mach_183_dmp = {
++		CONV_DS_MSG_INIT(EM_AARCH64, mach_183_dmp) };
++#if (EM_NUM != (EM_AARCH64 + 1))
++#error "EM_NUM has grown"
++#endif
+ 
+ 	/* Build NULL terminated return arrays for each string style */
+ 	static const const conv_ds_t	*ds_cf[] = {
+ 		CONV_DS_ADDR(ds_mach_0_11_cf), CONV_DS_ADDR(ds_mach_15_22_cf),
+ 		CONV_DS_ADDR(ds_mach_36_63_cf), CONV_DS_ADDR(ds_mach_66_94_cf),
+-		NULL
++		CONV_DS_ADDR(ds_mach_183_cf), NULL
+ 	};
+ 	static const const conv_ds_t	*ds_nf[] = {
+ 		CONV_DS_ADDR(ds_mach_0_11_nf), CONV_DS_ADDR(ds_mach_15_22_nf),
+ 		CONV_DS_ADDR(ds_mach_36_63_nf), CONV_DS_ADDR(ds_mach_66_94_nf),
+-		NULL
++		CONV_DS_ADDR(ds_mach_183_nf), NULL
+ 	};
+ 	static const const conv_ds_t	*ds_dmp[] = {
+ 		CONV_DS_ADDR(ds_mach_0_11_dmp), CONV_DS_ADDR(ds_mach_15_22_dmp),
+ 		CONV_DS_ADDR(ds_mach_36_63_dmp),
+-		CONV_DS_ADDR(ds_mach_66_94_dmp), NULL
++		CONV_DS_ADDR(ds_mach_66_94_dmp), CONV_DS_ADDR(ds_mach_183_dmp),
++		NULL
+ 	};
+ 
+ 
+@@ -592,10 +608,125 @@ conv_iter_ehdr_vers(Conv_fmt_flags_t fmt_flags, conv_iter_cb_t func,
+ }
+ 
+ static void
++conv_ehdr_arm_flags_strings(Conv_fmt_flags_t fmt_flags,
++    const conv_ds_vd_t **mm_msg, const Val_desc **flag_desc)
++{
++	/*
++	 * XXXARM: We assume all the EABI ver strings are the same size, we
++	 * shouldn't
++	 */
++#define	ARM_EFLAGSZ CONV_EXPN_FIELD_DEF_PREFIX_SIZE +	\
++	    MSG_EF_ARM_EABI_VER1_CF_SIZE	+ CONV_EXPN_FIELD_DEF_SEP_SIZE +	\
++	    MSG_EF_ARM_RELEXEC_CF_SIZE		+ CONV_EXPN_FIELD_DEF_SEP_SIZE +	\
++	    MSG_EF_ARM_HASENTRY_CF_SIZE		+ CONV_EXPN_FIELD_DEF_SEP_SIZE +	\
++	    MSG_EF_ARM_INTERWORK_CF_SIZE	+ CONV_EXPN_FIELD_DEF_SEP_SIZE +	\
++	    MSG_EF_ARM_APCS_26_CF_SIZE		+ CONV_EXPN_FIELD_DEF_SEP_SIZE +	\
++	    MSG_EF_ARM_APCS_FLOAT_CF_SIZE	+ CONV_EXPN_FIELD_DEF_SEP_SIZE +	\
++	    MSG_EF_ARM_PIC_CF_SIZE		+ CONV_EXPN_FIELD_DEF_SEP_SIZE +	\
++	    MSG_EF_ARM_ALIGN8_CF_SIZE		+ CONV_EXPN_FIELD_DEF_SEP_SIZE +	\
++	    MSG_EF_ARM_NEW_ABI_CF_SIZE		+ CONV_EXPN_FIELD_DEF_SEP_SIZE +	\
++	    MSG_EF_ARM_OLD_ABI_CF_SIZE		+ CONV_EXPN_FIELD_DEF_SEP_SIZE +	\
++	    MSG_EF_ARM_ABI_FLOAT_SOFT_CF_SIZE	+ CONV_EXPN_FIELD_DEF_SEP_SIZE +	\
++	    MSG_EF_ARM_ABI_FLOAT_HARD_CF_SIZE	+ CONV_EXPN_FIELD_DEF_SEP_SIZE +	\
++	    MSG_EF_ARM_MAVERICK_FLOAT_CF_SIZE	+ CONV_EXPN_FIELD_DEF_SEP_SIZE +	\
++	    MSG_EF_ARM_LE8_CF_SIZE		+ CONV_EXPN_FIELD_DEF_SEP_SIZE +	\
++	    MSG_EF_ARM_BE8_CF_SIZE		+ CONV_EXPN_FIELD_DEF_SEP_SIZE +	\
++	    CONV_INV_BUFSIZE + CONV_EXPN_FIELD_DEF_SUFFIX_SIZE
++
++	/*
++	 * Ensure that Conv_ehdr_flags_buf_t is large enough:
++	 *
++	 * ARM_EFLAGSZ is the real minimum size of the buffer required by
++	 * conv_ehdr_flags(). However, Conv_ehdr_flags_buf_t uses
++	 * CONV_EHDR_FLAG_BUFSIZE to set the buffer size. We do things
++	 * this way because the definition of ARM_EFLAGSZ uses information
++	 * that is not available in the environment of other programs
++	 * that include the conv.h header file.
++	 */
++#if (CONV_EHDR_FLAGS_BUFSIZE < ARM_EFLAGSZ) && !defined(__lint)
++#define	REPORT_BUFSIZE ARM_EFLAGSZ
++#include "report_bufsize.h"
++#error "CONV_EHDR_FLAGS_BUFSIZE is too small for ARM_EFLAGSZ"
++#endif
++
++	static const Val_desc eabi_flags_cf[] = {
++		{ EF_ARM_EABI_VER1, MSG_EF_ARM_EABI_VER1_CF },
++		{ EF_ARM_EABI_VER2, MSG_EF_ARM_EABI_VER2_CF },
++		{ EF_ARM_EABI_VER3, MSG_EF_ARM_EABI_VER3_CF },
++		{ EF_ARM_EABI_VER4, MSG_EF_ARM_EABI_VER4_CF },
++		{ EF_ARM_EABI_VER5, MSG_EF_ARM_EABI_VER5_CF },
++		{ 0 },
++	};
++
++	static const Val_desc eabi_flags_nf[] = {
++		{ EF_ARM_EABI_VER1, MSG_EF_ARM_EABI_VER1_NF },
++		{ EF_ARM_EABI_VER2, MSG_EF_ARM_EABI_VER2_NF },
++		{ EF_ARM_EABI_VER3, MSG_EF_ARM_EABI_VER3_NF },
++		{ EF_ARM_EABI_VER4, MSG_EF_ARM_EABI_VER4_NF },
++		{ EF_ARM_EABI_VER5, MSG_EF_ARM_EABI_VER5_NF },
++		{ 0 },
++	};
++
++	static const conv_ds_vd_t ds_eabi_flags_cf = {
++		CONV_DS_VD, EF_ARM_EABI_VER1, EF_ARM_EABI_VER5, eabi_flags_cf
++	};
++	static const conv_ds_vd_t ds_eabi_flags_nf = {
++		CONV_DS_VD, EF_ARM_EABI_VER1, EF_ARM_EABI_VER5, eabi_flags_nf
++	};
++
++	static const Val_desc vda_cf[] = {
++		{ EF_ARM_RELEXEC,		MSG_EF_ARM_RELEXEC_CF },
++		{ EF_ARM_HASENTRY,		MSG_EF_ARM_HASENTRY_CF },
++		{ EF_ARM_INTERWORK,		MSG_EF_ARM_INTERWORK_CF },
++		{ EF_ARM_APCS_26,		MSG_EF_ARM_APCS_26_CF },
++		{ EF_ARM_APCS_FLOAT,		MSG_EF_ARM_APCS_FLOAT_CF },
++		{ EF_ARM_PIC,			MSG_EF_ARM_PIC_CF },
++		{ EF_ARM_ALIGN8,		MSG_EF_ARM_ALIGN8_CF },
++		{ EF_ARM_NEW_ABI,		MSG_EF_ARM_NEW_ABI_CF },
++		{ EF_ARM_OLD_ABI,		MSG_EF_ARM_OLD_ABI_CF },
++		{ EF_ARM_ABI_FLOAT_SOFT,	MSG_EF_ARM_ABI_FLOAT_SOFT_CF },
++		{ EF_ARM_ABI_FLOAT_HARD,	MSG_EF_ARM_ABI_FLOAT_HARD_CF },
++		{ EF_ARM_MAVERICK_FLOAT,	MSG_EF_ARM_MAVERICK_FLOAT_CF },
++		{ EF_ARM_LE8,			MSG_EF_ARM_LE8_CF },
++		{ EF_ARM_BE8,			MSG_EF_ARM_BE8_CF },
++		{ 0 }
++	};
++
++	static const Val_desc vda_nf[] = {
++		{ EF_ARM_RELEXEC,		MSG_EF_ARM_RELEXEC_NF },
++		{ EF_ARM_HASENTRY,		MSG_EF_ARM_HASENTRY_NF },
++		{ EF_ARM_INTERWORK,		MSG_EF_ARM_INTERWORK_NF },
++		{ EF_ARM_APCS_26,		MSG_EF_ARM_APCS_26_NF },
++		{ EF_ARM_APCS_FLOAT,		MSG_EF_ARM_APCS_FLOAT_NF },
++		{ EF_ARM_PIC,			MSG_EF_ARM_PIC_NF },
++		{ EF_ARM_ALIGN8,		MSG_EF_ARM_ALIGN8_NF },
++		{ EF_ARM_NEW_ABI,		MSG_EF_ARM_NEW_ABI_NF },
++		{ EF_ARM_OLD_ABI,		MSG_EF_ARM_OLD_ABI_NF },
++		{ EF_ARM_ABI_FLOAT_SOFT,	MSG_EF_ARM_ABI_FLOAT_SOFT_NF },
++		{ EF_ARM_ABI_FLOAT_HARD,	MSG_EF_ARM_ABI_FLOAT_HARD_NF },
++		{ EF_ARM_MAVERICK_FLOAT,	MSG_EF_ARM_MAVERICK_FLOAT_NF },
++		{ EF_ARM_LE8,			MSG_EF_ARM_LE8_NF },
++		{ EF_ARM_BE8,			MSG_EF_ARM_BE8_NF },
++		{ 0 }
++	};
++
++	switch (CONV_TYPE_FMT_ALT(fmt_flags)) {
++	default:
++		*mm_msg = &ds_eabi_flags_cf;
++		*flag_desc = vda_cf;
++		break;
++	case CONV_FMT_ALT_NF:
++		*mm_msg = &ds_eabi_flags_nf;
++		*flag_desc = vda_nf;
++		break;
++	}
++}
++
++static void
+ conv_ehdr_sparc_flags_strings(Conv_fmt_flags_t fmt_flags,
+-    const conv_ds_msg_t **mm_msg, const Val_desc **flag_desc)
++    const conv_ds_vd_t **mm_msg, const Val_desc **flag_desc)
+ {
+-#define	EFLAGSZ	CONV_EXPN_FIELD_DEF_PREFIX_SIZE + \
++#define	SPARC_EFLAGSZ	CONV_EXPN_FIELD_DEF_PREFIX_SIZE + \
+ 	MSG_EF_SPARCV9_TSO_CF_SIZE	+ CONV_EXPN_FIELD_DEF_SEP_SIZE +  \
+ 	MSG_EF_SPARC_SUN_US1_CF_SIZE	+ CONV_EXPN_FIELD_DEF_SEP_SIZE +  \
+ 	MSG_EF_SPARC_HAL_R1_CF_SIZE	+ CONV_EXPN_FIELD_DEF_SEP_SIZE +  \
+@@ -605,31 +736,36 @@ conv_ehdr_sparc_flags_strings(Conv_fmt_flags_t fmt_flags,
+ 	/*
+ 	 * Ensure that Conv_ehdr_flags_buf_t is large enough:
+ 	 *
+-	 * EFLAGSZ is the real minimum size of the buffer required by
++	 * SPARC_EFLAGSZ is the real minimum size of the buffer required by
+ 	 * conv_ehdr_flags(). However, Conv_ehdr_flags_buf_t uses
+ 	 * CONV_EHDR_FLAG_BUFSIZE to set the buffer size. We do things
+-	 * this way because the definition of EFLAGSZ uses information
++	 * this way because the definition of SPARC_EFLAGSZ uses information
+ 	 * that is not available in the environment of other programs
+ 	 * that include the conv.h header file.
+ 	 */
+-#if (CONV_EHDR_FLAGS_BUFSIZE != EFLAGSZ) && !defined(__lint)
++#if (CONV_EHDR_FLAGS_BUFSIZE < SPARC_EFLAGSZ) && !defined(__lint)
+ #define	REPORT_BUFSIZE EFLAGSZ
+ #include "report_bufsize.h"
+-#error "CONV_EHDR_FLAGS_BUFSIZE does not match EFLAGSZ"
++#error "CONV_EHDR_FLAGS_BUFSIZE is too small for SPARC_EFLAGSZ"
+ #endif
+ 
+-	static const Msg mm_flags_cf[] = {
+-		MSG_EF_SPARCV9_TSO_CF,	MSG_EF_SPARCV9_PSO_CF,
+-		MSG_EF_SPARCV9_RMO_CF
++	static const Val_desc mm_flags_cf[] = {
++		{ EF_SPARCV9_TSO, MSG_EF_SPARCV9_TSO_CF },
++		{ EF_SPARCV9_PSO, MSG_EF_SPARCV9_PSO_CF },
++		{ EF_SPARCV9_RMO, MSG_EF_SPARCV9_RMO_CF },
++		{ 0 }
+ 	};
+-	static const Msg mm_flags_nf[] = {
+-		MSG_EF_SPARCV9_TSO_NF,	MSG_EF_SPARCV9_PSO_NF,
+-		MSG_EF_SPARCV9_RMO_NF
++	static const Val_desc mm_flags_nf[] = {
++		{ EF_SPARCV9_TSO, MSG_EF_SPARCV9_TSO_NF },
++		{ EF_SPARCV9_PSO, MSG_EF_SPARCV9_PSO_NF },
++		{ EF_SPARCV9_RMO, MSG_EF_SPARCV9_RMO_NF },
++		{ 0 }
+ 	};
+-	static const conv_ds_msg_t ds_mm_flags_cf = {
+-		CONV_DS_MSG_INIT(EF_SPARCV9_TSO, mm_flags_cf) };
+-	static const conv_ds_msg_t ds_mm_flags_nf = {
+-		CONV_DS_MSG_INIT(EF_SPARCV9_TSO, mm_flags_nf) };
++
++	static const conv_ds_vd_t ds_mm_flags_cf = {
++		CONV_DS_VD, EF_SPARCV9_TSO, EF_SPARCV9_RMO, mm_flags_cf };
++	static const conv_ds_vd_t ds_mm_flags_nf = {
++		CONV_DS_VD, EF_SPARCV9_TSO, EF_SPARCV9_RMO, mm_flags_nf };
+ 
+ 
+ 	static const Val_desc vda_cf[] = {
+@@ -667,31 +803,39 @@ conv_ehdr_flags(Half mach, Word flags, Conv_fmt_flags_t fmt_flags,
+     Conv_ehdr_flags_buf_t *flags_buf)
+ {
+ 	static const char *leading_str_arr[2];
+-	static CONV_EXPN_FIELD_ARG conv_arg = {
+-	    NULL, sizeof (flags_buf->buf), leading_str_arr };
+-
+ 	const char **lstr;
+-	const conv_ds_msg_t	*mm_msg;
++	const conv_ds_vd_t	*mm_msg;
+ 	const Val_desc		*vdp;
+ 	Word			mm;
+-
+-	/*
+-	 * Non-SPARC architectures presently provide no known flags.
+-	 */
+-	if ((mach != EM_SPARCV9) && (((mach != EM_SPARC) &&
+-	    (mach != EM_SPARC32PLUS)) || (flags == 0)))
+-		return (conv_invalid_val(&flags_buf->inv_buf, flags,
+-		    CONV_FMT_DECIMAL));
++	const conv_ds_t		*search[] = { NULL, NULL };
++	CONV_EXPN_FIELD_ARG 	conv_arg = {
++		.bufsize = sizeof (flags_buf->buf),
++		.lead_str = leading_str_arr,
++	};
+ 
+ 	conv_arg.buf = flags_buf->buf;
+-	conv_ehdr_sparc_flags_strings(fmt_flags, &mm_msg, &vdp);
+ 	conv_arg.oflags = conv_arg.rflags = flags;
+-
+-	mm = flags & EF_SPARCV9_MM;
+ 	lstr = leading_str_arr;
+-	if ((mach == EM_SPARCV9) && (mm <= mm_msg->ds_topval)) {
+-		*lstr++ = MSG_ORIG(mm_msg->ds_msg[mm]);
+-		conv_arg.rflags &= ~EF_SPARCV9_MM;
++	if (mach == EM_ARM) {
++		conv_ehdr_arm_flags_strings(fmt_flags, &mm_msg, &vdp);
++		mm = (flags & EF_ARM_EABI_MASK);
++		search[0] = CONV_DS_ADDR(*mm_msg);
++		*lstr++ = conv_map_ds(ELFOSABI_NONE, EM_NONE, mm,
++		    search, fmt_flags, &flags_buf->inv_buf);
++		conv_arg.rflags &= ~EF_ARM_EABI_MASK;
++	} else if ((mach == EM_SPARCV9) || (mach == EM_SPARC) ||
++	    (mach == EM_SPARC32PLUS)) {
++		conv_ehdr_sparc_flags_strings(fmt_flags, &mm_msg, &vdp);
++		search[0] = CONV_DS_ADDR(*mm_msg);
++		if ((mach == EM_SPARCV9)) {
++			mm = flags & EF_SPARCV9_MM;
++			*lstr++ = conv_map_ds(ELFOSABI_NONE, EM_NONE, mm,
++			    search, fmt_flags, &flags_buf->inv_buf);
++			conv_arg.rflags &= ~EF_SPARCV9_MM;
++		}
++	} else {
++		return (conv_invalid_val(&flags_buf->inv_buf, flags,
++		    CONV_FMT_DECIMAL));
+ 	}
+ 	*lstr = NULL;
+ 
+@@ -704,18 +848,16 @@ conv_iter_ret_t
+ conv_iter_ehdr_flags(Half mach, Conv_fmt_flags_t fmt_flags, conv_iter_cb_t func,
+     void *uvalue)
+ {
++	const Val_desc		*vdp;
++	const conv_ds_t		*ds[2];
++	const conv_ds_vd_t	*ds_vd;
+ 
+ 	if ((mach == EM_SPARCV9) || (mach == EM_SPARC) ||
+ 	    (mach == EM_SPARC32PLUS) || (mach == CONV_MACH_ALL)) {
+-		const conv_ds_msg_t	*ds_msg_mm;
+-		const Val_desc		*vdp;
+-
+-		conv_ehdr_sparc_flags_strings(fmt_flags, &ds_msg_mm, &vdp);
++		conv_ehdr_sparc_flags_strings(fmt_flags, &ds_vd, &vdp);
+ 
+ 		if (mach == EM_SPARCV9) {
+-			const conv_ds_t *ds[2];
+-
+-			ds[0] = CONV_DS_ADDR(ds_msg_mm);
++			ds[0] = CONV_DS_ADDR(*ds_vd);
+ 			ds[1] = NULL;
+ 
+ 			if (conv_iter_ds(ELFOSABI_NONE, mach, ds,
+@@ -723,7 +865,21 @@ conv_iter_ehdr_flags(Half mach, Conv_fmt_flags_t fmt_flags, conv_iter_cb_t func,
+ 				return (CONV_ITER_DONE);
+ 		}
+ 
+-		return (conv_iter_vd(vdp, func, uvalue));
++		if (conv_iter_vd(vdp, func, uvalue) == CONV_ITER_DONE)
++			return (CONV_ITER_DONE);
++	}
++
++	if ((mach == EM_ARM) || (mach == CONV_MACH_ALL)) {
++		conv_ehdr_arm_flags_strings(fmt_flags, &ds_vd, &vdp);
++		ds[0] = CONV_DS_ADDR(*ds_vd);
++		ds[1] = NULL;
++
++		if (conv_iter_ds(ELFOSABI_NONE, mach, ds,
++		    func, uvalue) == CONV_ITER_DONE)
++			return (CONV_ITER_DONE);
++
++		if (conv_iter_vd(vdp, func, uvalue) == CONV_ITER_DONE)
++			return (CONV_ITER_DONE);
+ 	}
+ 
+ 	return (CONV_ITER_CONT);
+diff --git a/usr/src/cmd/sgs/libconv/common/elf.msg b/usr/src/cmd/sgs/libconv/common/elf.msg
+index 24325f0..fffb7f7 100644
+--- a/usr/src/cmd/sgs/libconv/common/elf.msg
++++ b/usr/src/cmd/sgs/libconv/common/elf.msg
+@@ -223,7 +223,8 @@
+ @ MSG_EM_ARC_A5_NF			"arc_a5"
+ @ MSG_EM_XTENSA_CF		"EM_XTENSA"			# 94
+ @ MSG_EM_XTENSA_NF			"xtensa"
+-
++@ MSG_EM_AARCH64_CF		"EM_AARCH64"			# 183
++@ MSG_EM_AARCH64_NF			"aarch64"
+ 
+ @ MSG_EI_MAG0_CF		"EI_MAG0"			# 0
+ @ MSG_EI_MAG0_NF			"mag0"
+@@ -272,6 +273,46 @@
+ 
+ # Elf header EF_* flags
+ 
++@ MSG_EF_ARM_RELEXEC_CF		"EF_ARM_RELEXEC"		# 0x1
++@ MSG_EF_ARM_RELEXEC_NF			"ef_arm_relexec"
++@ MSG_EF_ARM_HASENTRY_CF	"EF_ARM_HASENTRY"		# 0x2
++@ MSG_EF_ARM_HASENTRY_NF		"ef_arm_hasentry"
++@ MSG_EF_ARM_INTERWORK_CF	"EF_ARM_INTERWORK"		# 0x4
++@ MSG_EF_ARM_INTERWORK_NF		"ef_arm_interwork"
++@ MSG_EF_ARM_APCS_26_CF		"EF_ARM_APCS_26"		# 0x8
++@ MSG_EF_ARM_APCS_26_NF			"ef_arm_apcs_26"
++@ MSG_EF_ARM_APCS_FLOAT_CF	"EF_ARM_APCS_FLOAT"		# 0x10
++@ MSG_EF_ARM_APCS_FLOAT_NF		"ef_arm_apcs_float"
++@ MSG_EF_ARM_PIC_CF		"EF_ARM_PIC"			# 0x20
++@ MSG_EF_ARM_PIC_NF			"ef_arm_pic"
++@ MSG_EF_ARM_ALIGN8_CF		"EF_ARM_ALIGN8"			# 0x40
++@ MSG_EF_ARM_ALIGN8_NF			"ef_arm_align8"
++@ MSG_EF_ARM_NEW_ABI_CF		"EF_ARM_NEW_ABI"		# 0x80
++@ MSG_EF_ARM_NEW_ABI_NF			"ef_arm_new_abi"
++@ MSG_EF_ARM_OLD_ABI_CF		"EF_ARM_OLD_ABI"		# 0x100
++@ MSG_EF_ARM_OLD_ABI_NF			"ef_arm_old_abi"
++@ MSG_EF_ARM_ABI_FLOAT_SOFT_CF	"EF_ARM_ABI_FLOAT_SOFT"		# 0x200
++@ MSG_EF_ARM_ABI_FLOAT_SOFT_NF		"ef_arm_abi_float_soft"
++@ MSG_EF_ARM_ABI_FLOAT_HARD_CF	"EF_ARM_ABI_FLOAT_HARD"		# 0x400
++@ MSG_EF_ARM_ABI_FLOAT_HARD_NF		"ef_arm_abi_float_hard"
++@ MSG_EF_ARM_MAVERICK_FLOAT_CF	"EF_ARM_MAVERICK_FLOAT"		# 0x800
++@ MSG_EF_ARM_MAVERICK_FLOAT_NF		"ef_arm_maverick_float"
++@ MSG_EF_ARM_LE8_CF		"EF_ARM_LE8"			# 0x00400000
++@ MSG_EF_ARM_LE8_NF			"ef_arm_le8"
++@ MSG_EF_ARM_BE8_CF             "EF_ARM_BE8"			# 0x00800000
++@ MSG_EF_ARM_BE8_NF             	"ef_arm_be8"
++
++@ MSG_EF_ARM_EABI_VER1_CF	"EF_ARM_EABI_VER1"
++@ MSG_EF_ARM_EABI_VER1_NF	"ef_arm_eabi_ver1"
++@ MSG_EF_ARM_EABI_VER2_CF	"EF_ARM_EABI_VER2"
++@ MSG_EF_ARM_EABI_VER2_NF	"ef_arm_eabi_ver2"
++@ MSG_EF_ARM_EABI_VER3_CF	"EF_ARM_EABI_VER3"
++@ MSG_EF_ARM_EABI_VER3_NF	"ef_arm_eabi_ver3"
++@ MSG_EF_ARM_EABI_VER4_CF	"EF_ARM_EABI_VER4"
++@ MSG_EF_ARM_EABI_VER4_NF	"ef_arm_eabi_ver4"
++@ MSG_EF_ARM_EABI_VER5_CF	"EF_ARM_EABI_VER5"
++@ MSG_EF_ARM_EABI_VER5_NF	"ef_arm_eabi_ver5"
++
+ @ MSG_EF_SPARC_32PLUS_CF	"EF_SPARC_32PLUS"		# 0x000100
+ @ MSG_EF_SPARC_32PLUS_NF		"sparc_32plus"
+ @ MSG_EF_SPARC_SUN_US1_CF	"EF_SPARC_SUN_US1"		# 0x000200
+diff --git a/usr/src/cmd/sgs/libconv/common/lintsup.c b/usr/src/cmd/sgs/libconv/common/lintsup.c
+index 4c0d6e4..e764947 100644
+--- a/usr/src/cmd/sgs/libconv/common/lintsup.c
++++ b/usr/src/cmd/sgs/libconv/common/lintsup.c
+@@ -53,6 +53,7 @@
+  */
+ #define	LINTSUP_SUPPRESS_STRINGS
+ #include "arch_msg.h"
++#include "armattrs_msg.h"
+ #include "audit_msg.h"
+ #include "c_literal_msg.h"
+ #include "cap_msg.h"
+@@ -73,6 +74,7 @@
+ #include "map_msg.h"
+ #include "phdr_msg.h"
+ #include "relocate_amd64_msg.h"
++#include "relocate_arm_msg.h"
+ #include "relocate_i386_msg.h"
+ #include "relocate_sparc_msg.h"
+ #include "sections_msg.h"
+@@ -89,6 +91,7 @@ foo()
+ #define	USE(name) (void) name((Msg)&_ ## name[0])
+ 
+ 	USE(_sgs_msg_libconv_arch);
++	USE(_sgs_msg_libconv_armattrs);
+ 	USE(_sgs_msg_libconv_audit);
+ 	USE(_sgs_msg_libconv_c_literal);
+ 	USE(_sgs_msg_libconv_cap);
+@@ -109,6 +112,7 @@ foo()
+ 	USE(_sgs_msg_libconv_map);
+ 	USE(_sgs_msg_libconv_phdr);
+ 	USE(_sgs_msg_libconv_relocate_amd64);
++	USE(_sgs_msg_libconv_relocate_arm);
+ 	USE(_sgs_msg_libconv_relocate_i386);
+ 	USE(_sgs_msg_libconv_relocate_sparc);
+ 	USE(_sgs_msg_libconv_sections);
+diff --git a/usr/src/cmd/sgs/libconv/common/llib-lconv b/usr/src/cmd/sgs/libconv/common/llib-lconv
+index 4200651..8b2fcf4 100644
+--- a/usr/src/cmd/sgs/libconv/common/llib-lconv
++++ b/usr/src/cmd/sgs/libconv/common/llib-lconv
+@@ -157,6 +157,10 @@ const char	*conv_reloc_type(Half, Word, Conv_fmt_flags_t,
+ 		    Conv_inv_buf_t *);
+ const char	*conv_reloc_type_static(Half, Word, Conv_fmt_flags_t);
+ const char	*conv_reloc_386_type(Word, Conv_fmt_flags_t, Conv_inv_buf_t *);
++const char	*conv_reloc_arm_type(Word, Conv_fmt_flags_t,
++		    Conv_inv_buf_t *);
++const char	*conv_reloc_aarch64_type(Word, Conv_fmt_flags_t,
++		    Conv_inv_buf_t *);
+ const char	*conv_reloc_amd64_type(Word, Conv_fmt_flags_t,
+ 		    Conv_inv_buf_t *);
+ const char	*conv_reloc_SPARC_type(Word, Conv_fmt_flags_t,
+diff --git a/usr/src/cmd/sgs/libconv/common/phdr.c b/usr/src/cmd/sgs/libconv/common/phdr.c
+index 05aeb0a..4b55ee8 100644
+--- a/usr/src/cmd/sgs/libconv/common/phdr.c
++++ b/usr/src/cmd/sgs/libconv/common/phdr.c
+@@ -29,15 +29,19 @@
+  */
+ #include	<stdio.h>
+ #include	<string.h>
++#define	ELF_TARGET_ARM
++#include	<sys/elf.h>
+ #include	<_conv.h>
+ #include	<phdr_msg.h>
+ 
++
+ static const conv_ds_t **
+ conv_phdr_type_strings(Conv_fmt_flags_t fmt_flags)
+ {
+ #define	ALL	ELFOSABI_NONE, EM_NONE
+ #define	SOL	ELFOSABI_SOLARIS, EM_NONE
+ #define	LIN	ELFOSABI_LINUX, EM_NONE
++#define	ARM	ELFOSABI_NONE, EM_ARM
+ 
+ 	static const Msg	phdrs_def[] = {
+ 		MSG_PT_NULL,			MSG_PT_LOAD,
+@@ -83,7 +87,6 @@ error "PT_NUM has grown. Update phdrs[]"
+ 	static const conv_ds_msg_t ds_phdrs_nf = {
+ 	    CONV_DS_MSG_INIT(PT_NULL, phdrs_nf) };
+ 
+-
+ 	static const Val_desc2 phdrs_osabi_def[] = {
+ 		{ PT_SUNWBSS,		SOL,	MSG_PT_SUNWBSS },
+ 		{ PT_SUNWSTACK, 	SOL,	MSG_PT_SUNWSTACK },
+@@ -143,6 +146,7 @@ error "PT_NUM has grown. Update phdrs[]"
+ #if PT_LOSUNW != PT_SUNWBSS
+ #error "PT_LOSUNW has grown. Update phdrs_osabi[]"
+ #endif
++
+ 	static const conv_ds_vd2_t ds_phdrs_osabi_def = {
+ 	    CONV_DS_VD2, PT_LOOS, PT_HIOS, phdrs_osabi_def };
+ 	static const conv_ds_vd2_t ds_phdrs_osabi_cf = {
+@@ -152,22 +156,53 @@ error "PT_NUM has grown. Update phdrs[]"
+ 	static const conv_ds_vd2_t ds_phdrs_osabi_nf = {
+ 	    CONV_DS_VD2, PT_LOOS, PT_HIOS, phdrs_osabi_nf };
+ 
++	static const Val_desc2 phdrs_mach_def[] = {
++	    { PT_ARM_ARCHEXT,	ARM, MSG_PT_ARM_ARCHEXT },
++	    { PT_ARM_EXIDX,	ARM, MSG_PT_ARM_EXIDX },
++	    { 0 },
++	};
++	static const Val_desc2 phdrs_mach_cf[] = {
++	    { PT_ARM_ARCHEXT,	ARM, MSG_PT_ARM_ARCHEXT_CF },
++	    { PT_ARM_EXIDX,	ARM, MSG_PT_ARM_EXIDX_CF },
++	};
++	static const Val_desc2 phdrs_mach_cfnp[] = {
++	    { PT_ARM_ARCHEXT,	ARM, MSG_PT_ARM_ARCHEXT_CFNP },
++	    { PT_ARM_EXIDX,	ARM, MSG_PT_ARM_EXIDX_CFNP },
++	};
++	static const Val_desc2 phdrs_mach_nf[] = {
++	    { PT_ARM_ARCHEXT,	ARM, MSG_PT_ARM_ARCHEXT_NF },
++	    { PT_ARM_EXIDX,	ARM, MSG_PT_ARM_EXIDX_NF },
++	};
++
++	static const conv_ds_vd2_t ds_phdrs_mach_def = {
++	    CONV_DS_VD2, PT_LOPROC, PT_HIPROC, phdrs_mach_def };
++	static const conv_ds_vd2_t ds_phdrs_mach_cf = {
++	    CONV_DS_VD2, PT_LOPROC, PT_HIPROC, phdrs_mach_cf };
++	static const conv_ds_vd2_t ds_phdrs_mach_cfnp = {
++	    CONV_DS_VD2, PT_LOPROC, PT_HIPROC, phdrs_mach_cfnp };
++	static const conv_ds_vd2_t ds_phdrs_mach_nf = {
++	    CONV_DS_VD2, PT_LOPROC, PT_HIPROC, phdrs_mach_nf };
+ 
+ 	/* Build NULL terminated return arrays for each string style */
+ 	static const const conv_ds_t	*ds_def[] = {
+ 		CONV_DS_ADDR(ds_phdrs_def), CONV_DS_ADDR(ds_phdrs_osabi_def),
++		CONV_DS_ADDR(ds_phdrs_mach_def),
+ 		NULL };
+ 	static const conv_ds_t	*ds_dmp[] = {
+ 		CONV_DS_ADDR(ds_phdrs_dmp), CONV_DS_ADDR(ds_phdrs_osabi_cfnp),
++		CONV_DS_ADDR(ds_phdrs_mach_cfnp),
+ 		NULL };
+ 	static const conv_ds_t	*ds_cf[] = {
+ 		CONV_DS_ADDR(ds_phdrs_cf), CONV_DS_ADDR(ds_phdrs_osabi_cf),
++		CONV_DS_ADDR(ds_phdrs_mach_cf),
+ 		NULL };
+ 	static const conv_ds_t	*ds_cfnp[] = {
+ 		CONV_DS_ADDR(ds_phdrs_cfnp), CONV_DS_ADDR(ds_phdrs_osabi_cfnp),
++		CONV_DS_ADDR(ds_phdrs_mach_cfnp),
+ 		NULL };
+ 	static const conv_ds_t	*ds_nf[] = {
+ 		CONV_DS_ADDR(ds_phdrs_nf), CONV_DS_ADDR(ds_phdrs_osabi_nf),
++		CONV_DS_ADDR(ds_phdrs_mach_nf),
+ 		NULL };
+ 
+ 	/* Select the strings to use */
+@@ -187,6 +222,7 @@ error "PT_NUM has grown. Update phdrs[]"
+ #undef ALL
+ #undef SOL
+ #undef LIN
++#undef ARM
+ }
+ 
+ const char *
+diff --git a/usr/src/cmd/sgs/libconv/common/phdr.msg b/usr/src/cmd/sgs/libconv/common/phdr.msg
+index 789832a..9f17374 100644
+--- a/usr/src/cmd/sgs/libconv/common/phdr.msg
++++ b/usr/src/cmd/sgs/libconv/common/phdr.msg
+@@ -97,6 +97,15 @@
+ @ MSG_PT_SUNWCAP_CFNP			"SUNWCAP"
+ @ MSG_PT_SUNWCAP_NF			"sunwcap"
+ 
++@ MSG_PT_ARM_ARCHEXT		"[ PT_ARM_ARCHEXT ]"		# 0x70000000
++@ MSG_PT_ARM_ARCHEXT_CF			"PT_ARM_ARCHEXT"
++@ MSG_PT_ARM_ARCHEXT_CFNP		"ARM_ARCHEXT"
++@ MSG_PT_ARM_ARCHEXT_NF			"arm_archext"
++@ MSG_PT_ARM_EXIDX		"[ PT_ARM_EXIDX ]"		# 0x70000001
++@ MSG_PT_ARM_EXIDX_CF			"PT_ARM_EXIDX"
++@ MSG_PT_ARM_EXIDX_CFNP			"ARM_EXIDX"
++@ MSG_PT_ARM_EXIDX_NF			"arm_exidx"
++
+ @ MSG_PF_X_CF			 "PF_X"				# 0x1
+ @ MSG_PF_X_NF				 "x"
+ @ MSG_PF_W_CF			 "PF_W"				# 0x2
+diff --git a/usr/src/cmd/sgs/libconv/common/relocate.c b/usr/src/cmd/sgs/libconv/common/relocate.c
+index 048a51e..40bdaf8 100644
+--- a/usr/src/cmd/sgs/libconv/common/relocate.c
++++ b/usr/src/cmd/sgs/libconv/common/relocate.c
+@@ -23,7 +23,6 @@
+  * Copyright 2007 Sun Microsystems, Inc.  All rights reserved.
+  * Use is subject to license terms.
+  */
+-#pragma ident	"%Z%%M%	%I%	%E% SMI"
+ 
+ /*
+  * String conversion routine for relocation types.
+@@ -49,6 +48,10 @@ conv_reloc_type(Half mach, Word type, Conv_fmt_flags_t fmt_flags,
+ 
+ 	case EM_AMD64:
+ 		return (conv_reloc_amd64_type(type, fmt_flags, inv_buf));
++	case EM_ARM:
++		return (conv_reloc_arm_type(type, fmt_flags, inv_buf));
++	case EM_AARCH64:
++		return (conv_reloc_aarch64_type(type, fmt_flags, inv_buf));
+ 	}
+ 
+ 	/* If didn't match a machine type, use integer value */
+diff --git a/usr/src/cmd/sgs/libconv/common/sections.c b/usr/src/cmd/sgs/libconv/common/sections.c
+index 46e77b1..6596f91 100644
+--- a/usr/src/cmd/sgs/libconv/common/sections.c
++++ b/usr/src/cmd/sgs/libconv/common/sections.c
+@@ -31,6 +31,7 @@
+ #include	<sys/param.h>
+ #include	<sys/elf_SPARC.h>
+ #include	<sys/elf_amd64.h>
++#include	<sys/elf_ARM.h>
+ #include	<_conv.h>
+ #include	<sections_msg.h>
+ 
+@@ -243,6 +244,35 @@ sec_type_strings(conv_iter_osabi_t osabi, Half mach, Conv_fmt_flags_t fmt_flags)
+ 	static const conv_ds_msg_t ds_amd64_nf = {
+ 	    CONV_DS_MSG_INIT(SHT_AMD64_UNWIND, amd64_nf) };
+ 
++	/* arm procesor range */
++	static const Msg arm_def[] = {
++		MSG_SHT_ARM_EXIDX, MSG_SHT_ARM_PREEMPTMAP,
++		MSG_SHT_ARM_ATTRIBUTES, MSG_SHT_ARM_DEBUGOVERLAY,
++		MSG_SHT_ARM_OVERLAYSECTION
++	};
++	static const Msg arm_dmp[] = {
++		MSG_SHT_ARM_EXIDX_DMP, MSG_SHT_ARM_PREEMPTMAP_DMP,
++		MSG_SHT_ARM_ATTRIBUTES_DMP, MSG_SHT_ARM_DEBUGOVERLAY_DMP,
++		MSG_SHT_ARM_OVERLAYSECTION_DMP
++	};
++	static const Msg arm_cf[] = {
++		MSG_SHT_ARM_EXIDX_CF, MSG_SHT_ARM_PREEMPTMAP_CF,
++		MSG_SHT_ARM_ATTRIBUTES_CF, MSG_SHT_ARM_DEBUGOVERLAY_CF,
++		MSG_SHT_ARM_OVERLAYSECTION_CF
++	};
++	static const Msg arm_nf[] = {
++		MSG_SHT_ARM_EXIDX_NF, MSG_SHT_ARM_PREEMPTMAP_NF,
++		MSG_SHT_ARM_ATTRIBUTES_NF, MSG_SHT_ARM_DEBUGOVERLAY_NF,
++		MSG_SHT_ARM_OVERLAYSECTION_NF
++	};
++	static const conv_ds_msg_t ds_arm_def = {
++	    CONV_DS_MSG_INIT(SHT_ARM_EXIDX, arm_def) };
++	static const conv_ds_msg_t ds_arm_dmp = {
++	    CONV_DS_MSG_INIT(SHT_ARM_EXIDX, arm_dmp) };
++	static const conv_ds_msg_t ds_arm_cf = {
++	    CONV_DS_MSG_INIT(SHT_ARM_EXIDX, arm_cf) };
++	static const conv_ds_msg_t ds_arm_nf = {
++	    CONV_DS_MSG_INIT(SHT_ARM_EXIDX, arm_nf) };
+ 
+ 	static const conv_ds_t	*retarr[MAX_RET];
+ 	int			retndx = 0;
+@@ -337,6 +367,23 @@ sec_type_strings(conv_iter_osabi_t osabi, Half mach, Conv_fmt_flags_t fmt_flags)
+ 		}
+ 	}
+ 
++	if (mach == EM_ARM) {
++		switch (CONV_TYPE_FMT_ALT(fmt_flags)) {
++		case CONV_FMT_ALT_DUMP:
++			retarr[retndx++] = CONV_DS_ADDR(ds_arm_dmp);
++			break;
++		case CONV_FMT_ALT_CF:
++			retarr[retndx++] = CONV_DS_ADDR(ds_arm_cf);
++			break;
++		case CONV_FMT_ALT_NF:
++			retarr[retndx++] = CONV_DS_ADDR(ds_arm_nf);
++			break;
++		default:
++			retarr[retndx++] = CONV_DS_ADDR(ds_arm_def);
++			break;
++		}
++	}
++
+ 	retarr[retndx++] = NULL;
+ 	assert(retndx <= MAX_RET);
+ 	return (retarr);
+diff --git a/usr/src/cmd/sgs/libconv/common/sections.msg b/usr/src/cmd/sgs/libconv/common/sections.msg
+index 0a34843..1146bdd 100644
+--- a/usr/src/cmd/sgs/libconv/common/sections.msg
++++ b/usr/src/cmd/sgs/libconv/common/sections.msg
+@@ -208,6 +208,27 @@
+ @ MSG_SHT_SPARC_GOTDATA_CF		"SHT_SPARC_GOTDATA"
+ @ MSG_SHT_SPARC_GOTDATA_NF		"sparc_gotdata"
+ 
++@ MSG_SHT_ARM_EXIDX		"[ SHT_ARM_EXIDX ]"		# 0x70000001
++@ MSG_SHT_ARM_EXIDX_DMP			"EXIDX"
++@ MSG_SHT_ARM_EXIDX_CF			"SHT_ARM_EXIDX"
++@ MSG_SHT_ARM_EXIDX_NF	    		"arm_exidx"
++@ MSG_SHT_ARM_PREEMPTMAP	"[ SHT_ARM_PREEMPTMAP ]"	# 0x70000002
++@ MSG_SHT_ARM_PREEMPTMAP_DMP		"PREEMPTMAP"
++@ MSG_SHT_ARM_PREEMPTMAP_CF		"SHT_ARM_PREEMPTMAP"
++@ MSG_SHT_ARM_PREEMPTMAP_NF	        "arm_preemptmap"
++@ MSG_SHT_ARM_ATTRIBUTES	"[ SHT_ARM_ATTRIBUTES ]"	# 0x70000003
++@ MSG_SHT_ARM_ATTRIBUTES_DMP		"ATTRIBUTES"
++@ MSG_SHT_ARM_ATTRIBUTES_CF		"SHT_ARM_ATTRIBUTES"
++@ MSG_SHT_ARM_ATTRIBUTES_NF	        "arm_attributes"
++@ MSG_SHT_ARM_DEBUGOVERLAY	"[ SHT_ARM_DEBUGOVERLAY ]"	# 0x70000004
++@ MSG_SHT_ARM_DEBUGOVERLAY_DMP		"DEBUGOVERLAY"
++@ MSG_SHT_ARM_DEBUGOVERLAY_CF		"SHT_ARM_DEBUGOVERLAY"
++@ MSG_SHT_ARM_DEBUGOVERLAY_NF	        "arm_debugoverlay"
++@ MSG_SHT_ARM_OVERLAYSECTION	"[ SHT_ARM_OVERLAYSECTION ]"	# 0x70000005
++@ MSG_SHT_ARM_OVERLAYSECTION_DMP	"OVERLAYSECTION"
++@ MSG_SHT_ARM_OVERLAYSECTION_CF		"SHT_ARM_OVERLAYSECTION"
++@ MSG_SHT_ARM_OVERLAYSECTION_NF	        "arm_debugoverlay"
++
+ @ MSG_SHN_AFTER		"[ SHN_AFTER ]"
+ @ MSG_SHN_BEFORE	"[ SHN_BEFORE ]"
+ 
+diff --git a/usr/src/cmd/sgs/libld/Makefile.com b/usr/src/cmd/sgs/libld/Makefile.com
+index 0141955..8106db4 100644
+--- a/usr/src/cmd/sgs/libld/Makefile.com
++++ b/usr/src/cmd/sgs/libld/Makefile.com
+@@ -51,8 +51,8 @@ AVLOBJ =	avl.o
+ 
+ # Relocation engine objects. These are kept separate from the L_XXX_MACHOBJS
+ # lists below in order to facilitate linting them.
+-G_MACHOBJS32 =	doreloc_sparc_32.o doreloc_x86_32.o
+-G_MACHOBJS64 =	doreloc_sparc_64.o doreloc_x86_64.o
++G_MACHOBJS32 =	doreloc_sparc_32.o doreloc_x86_32.o doreloc_arm_32.o
++G_MACHOBJS64 =	doreloc_sparc_64.o doreloc_x86_64.o doreloc_arm_64.o
+ 
+ # Target specific objects (sparc/sparcv9)
+ L_SPARC_MACHOBJS32 =	machrel.sparc32.o	machsym.sparc32.o
+@@ -63,14 +63,17 @@ E_X86_TOOLOBJS =	leb128.o
+ L_X86_MACHOBJS32 =	machrel.intel32.o
+ L_X86_MACHOBJS64 =	machrel.amd64.o
+ 
++# Target specific objects (arm/aarch64)
++L_ARM_MACHOBJS32 =	machrel.arm32.o
++L_ARM_MACHOBJS64 =	machrel.aarch64.o
+ 
+ # All target specific objects rolled together
+ E_TOOLOBJS =	$(E_SPARC_TOOLOBJS) \
+ 	$(E_X86_TOOLOBJS)
+ L_MACHOBJS32 =	$(L_SPARC_MACHOBJS32) \
+-	$(L_X86_MACHOBJS32)
++	$(L_X86_MACHOBJS32) $(L_ARM_MACHOBJS32)
+ L_MACHOBJS64 =	$(L_SPARC_MACHOBJS64) \
+-	$(L_X86_MACHOBJS64)
++	$(L_X86_MACHOBJS64) $(L_ARM_MACHOBJS64)
+ 
+ 
+ 
+@@ -96,6 +99,8 @@ CERRWARN += -_gcc=-Wno-type-limits
+ 
+ # Location of the shared relocation engines maintained under usr/src/uts.
+ #
++KRTLD_ARM = $(SRCBASE)/uts/$(VAR_PLAT_arm)/krtld
++KRTLD_AARCH64 = $(SRCBASE)/uts/$(VAR_PLAT_aarch64)/krtld
+ KRTLD_I386 = $(SRCBASE)/uts/$(VAR_PLAT_i386)/krtld
+ KRTLD_AMD64 = $(SRCBASE)/uts/$(VAR_PLAT_amd64)/krtld
+ KRTLD_SPARC = $(SRCBASE)/uts/$(VAR_PLAT_sparc)/krtld
+@@ -137,8 +142,10 @@ CHKSRCS =	$(SRCBASE)/uts/common/krtld/reloc.h \
+ 		$(COMOBJS32:%32.o=../common/%.c) \
+ 		$(L_MACHOBJS32:%32.o=../common/%.c) \
+ 		$(L_MACHOBJS64:%64.o=../common/%.c) \
+-		$(KRTLD_I386)/doreloc.c \
++		$(KRTLD_AARCH64)/doreloc.c \
+ 		$(KRTLD_AMD64)/doreloc.c \
++		$(KRTLD_ARM)/doreloc.c \
++		$(KRTLD_I386)/doreloc.c \
+ 		$(KRTLD_SPARC)/doreloc.c
+ 
+ SRCS =		../common/llib-lld
+@@ -162,9 +169,11 @@ $(LINTOUT32) :=	CPPFLAGS += -DDO_RELOC_LIBLD
+ $(LINTOUT64) :=	CPPFLAGS += -DDO_RELOC_LIBLD -D_ELF64
+ $(LINTLIB32) :=	CPPFLAGS += -DDO_RELOC_LIBLD
+ $(LINTLIB64) :=	CPPFLAGS += -DDO_RELOC_LIBLD -D_ELF64
+-LINTSRCS32 +=	$(KRTLD_I386)/doreloc.c	\
++LINTSRCS32 +=	$(KRTLD_ARM)/doreloc.c \
++		$(KRTLD_I386)/doreloc.c	\
+ 		$(KRTLD_SPARC)/doreloc.c
+-LINTSRCS64 +=	$(KRTLD_AMD64)/doreloc.c \
++LINTSRCS64 +=	$(KRTLD_AARCH64)/doreloc.c \
++		$(KRTLD_AMD64)/doreloc.c \
+ 		$(KRTLD_SPARC)/doreloc.c
+ 
+ CLEANFILES +=	$(LINTOUTS) $(BLTFILES)
+diff --git a/usr/src/cmd/sgs/libld/Makefile.targ b/usr/src/cmd/sgs/libld/Makefile.targ
+index c8f514c..ce01e89 100644
+--- a/usr/src/cmd/sgs/libld/Makefile.targ
++++ b/usr/src/cmd/sgs/libld/Makefile.targ
+@@ -86,6 +86,13 @@ pics/%_sparc_64.o: \
+ 		$(COMPILE.c) -o $@ -D_ELF64 -DDO_RELOC_LIBLD $<
+ 		$(POST_PROCESS_O)
+ 
++pics/%_arm_32.o: $(KRTLD_ARM)/%.c
++		$(COMPILE.c) -o $@ -DDO_RELOC_LIBLD $<
++		$(POST_PROCESS_O)
++
++pics/%_arm_64.o: $(KRTLD_AARCH64)/%.c
++		$(COMPILE.c) -o $@ -D_ELF64 -DDO_RELOC_LIBLD $<
++		$(POST_PROCESS_O)
+ 
+ $(LIBLINKS):
+ 		$(RM) $@; $(SYMLINK) $(DYNLIB) $@
+diff --git a/usr/src/cmd/sgs/libld/common/README.XLINK b/usr/src/cmd/sgs/libld/common/README.XLINK
+index 5eba8e5..70dd9cd 100644
+--- a/usr/src/cmd/sgs/libld/common/README.XLINK
++++ b/usr/src/cmd/sgs/libld/common/README.XLINK
+@@ -100,6 +100,8 @@ new target. To do so, examine the common header files:
+ 
+    and the existing relocation engines:
+ 
++	usr/src/uts/arm/aarch32/krtld/doreloc.c
++	usr/src/uts/arm/aarch64/krtld/doreloc.c
+ 	usr/src/uts/intel/amd64/krtld/doreloc.c
+ 	usr/src/uts/intel/ia32/krtld/doreloc.c
+ 	usr/src/uts/sparc/krtld/doreloc.c
+diff --git a/usr/src/cmd/sgs/libld/common/_libld.h b/usr/src/cmd/sgs/libld/common/_libld.h
+index 146dd54..115b3d1 100644
+--- a/usr/src/cmd/sgs/libld/common/_libld.h
++++ b/usr/src/cmd/sgs/libld/common/_libld.h
+@@ -1000,6 +1000,8 @@ extern uintptr_t	ld_sym_resolve(Sym_desc *, Sym *, Ifl_desc *,
+ extern uintptr_t	ld_sym_spec(Ofl_desc *);
+ 
+ extern Target		ld_targ;
++extern const Target	*ld_targ_init_arm(void);
++extern const Target	*ld_targ_init_aarch64(void);
+ extern const Target	*ld_targ_init_sparc(void);
+ extern const Target	*ld_targ_init_x86(void);
+ 
+diff --git a/usr/src/cmd/sgs/libld/common/files.c b/usr/src/cmd/sgs/libld/common/files.c
+index d731e93..95e48b5 100644
+--- a/usr/src/cmd/sgs/libld/common/files.c
++++ b/usr/src/cmd/sgs/libld/common/files.c
+@@ -33,6 +33,7 @@
+ 
+ #define	ELF_TARGET_AMD64
+ #define	ELF_TARGET_SPARC
++#define	ELF_TARGET_ARM
+ 
+ #include	<stdio.h>
+ #include	<string.h>
+@@ -1439,6 +1440,19 @@ process_progbits_alloc(const char *name, Ifl_desc *ifl, Shdr *shdr,
+ 
+ 	if (name[0] == '.') {
+ 		switch (name[1]) {
++		/*
++		 * XXXARM: We want to sort like .eh_frame, but not
++		 * _be_ .eh_frame, because we don't understand a damn
++		 * thing about ARM unwinding.
++		 */
++		case 'A':
++			if (!is_name_cmp(name, MSG_ORIG(MSG_SCN_ARMEXTAB),
++			    MSG_SCN_ARMEXTAB_SIZE))
++				break;
++
++			*ident = ld_targ.t_id.id_unwind;
++			done = TRUE;
++			break;
+ 		case 'e':
+ 			if (!is_name_cmp(name, MSG_ORIG(MSG_SCN_EHFRAME),
+ 			    MSG_SCN_EHFRAME_SIZE))
+@@ -2760,22 +2774,19 @@ process_elf(Ifl_desc *ifl, Elf *elf, Ofl_desc *ofl)
+ 				    ld_targ.t_id.id_gotdata, ofl) == S_ERROR)
+ 					return (S_ERROR);
+ 				break;
+-#if	defined(_ELF64)
++			/* case SHT_ARM_EXIDX: */
+ 			case SHT_AMD64_UNWIND:
+-				/*
+-				 * SHT_AMD64_UNWIND (0x70000001) is in the
+-				 * SHT_LOPROC - SHT_HIPROC range reserved
+-				 * for processor-specific semantics. It is
+-				 * only meaningful for amd64 targets.
+-				 */
+-				if (ld_targ.t_m.m_mach != EM_AMD64)
+-					goto do_default;
++				if (ld_targ.t_m.m_mach == EM_AMD64) {
++					/*
++					 * SHT_AMD64_UNWIND (0x70000001) is in
++					 * the SHT_LOPROC - SHT_HIPROC range
++					 * reserved for processor-specific
++					 * semantics. It is only meaningful
++					 * for amd64 targets.
++					 */
++					if (column != 0)
++						break;
+ 
+-				/*
+-				 * Target is x86, so this really is
+-				 * SHT_AMD64_UNWIND
+-				 */
+-				if (column == 0) {
+ 					/*
+ 					 * column == ET_REL
+ 					 */
+@@ -2785,9 +2796,26 @@ process_elf(Ifl_desc *ifl, Elf *elf, Ofl_desc *ofl)
+ 						return (S_ERROR);
+ 					ifl->ifl_isdesc[ndx]->is_flags |=
+ 					    FLG_IS_EHFRAME;
++				} else if (ld_targ.t_m.m_mach == EM_ARM) {
++					if (column != 0)
++						break;
++
++					if (process_section(name, ifl, shdr,
++					    scn, ndx, ld_targ.t_id.id_unknown,
++					    ofl) == S_ERROR)
++						return (S_ERROR);
++
++					/*
++					 * XXXARM: We don't set FLG_IS_EHFRAME
++					 * because while this is unwind
++					 * related crud, it's not _the same_
++					 * unwind related crud, and we don't
++					 * have the faintest idea how to
++					 * process it, we just want the
++					 * sections to sort properly.
++					 */
+ 				}
+ 				break;
+-#endif
+ 			default:
+ 			do_default:
+ 				if (process_section(name, ifl, shdr, scn, ndx,
+diff --git a/usr/src/cmd/sgs/libld/common/ldmain.c b/usr/src/cmd/sgs/libld/common/ldmain.c
+index 330a1cd..884fa5d 100644
+--- a/usr/src/cmd/sgs/libld/common/ldmain.c
++++ b/usr/src/cmd/sgs/libld/common/ldmain.c
+@@ -123,6 +123,14 @@ ld_init_target(Lm_list *lml, Half mach)
+ 		ld_targ = *ld_targ_init_sparc();
+ 		break;
+ 
++	case EM_ARM:
++		ld_targ = *ld_targ_init_arm();
++		break;
++
++	case EM_AARCH64:
++		ld_targ = *ld_targ_init_aarch64();
++		break;
++
+ 	default:
+ 		{
+ 			Conv_inv_buf_t	inv_buf;
+diff --git a/usr/src/cmd/sgs/libld/common/libld.msg b/usr/src/cmd/sgs/libld/common/libld.msg
+index 26c0e33..b8bc61a 100644
+--- a/usr/src/cmd/sgs/libld/common/libld.msg
++++ b/usr/src/cmd/sgs/libld/common/libld.msg
+@@ -739,6 +739,7 @@
+ @ MSG_STR_OSREL		"$OSREL"
+ @ MSG_STR_UU_REAL_U	"__real_"
+ @ MSG_STR_UU_WRAP_U	"__wrap_"
++@ MSG_STR_UARM		"_arm"
+ @ MSG_STR_UELF32	"_ELF32"
+ @ MSG_STR_UELF64	"_ELF64"
+ @ MSG_STR_USPARC	"_sparc"
+@@ -831,6 +832,12 @@
+ @ MSG_SYM_PREINITARRAY	"preinitarray"
+ 
+ #
++# ARM section names
++#
++@ MSG_SCN_ARMEXTAB	".ARM.extab"
++
++
++#
+ # GNU section names
+ #
+ @ MSG_SCN_CTORS		".ctors"
+diff --git a/usr/src/cmd/sgs/libld/common/machrel.intel.c b/usr/src/cmd/sgs/libld/common/machrel.intel.c
+index c449d6d..0a33143 100644
+--- a/usr/src/cmd/sgs/libld/common/machrel.intel.c
++++ b/usr/src/cmd/sgs/libld/common/machrel.intel.c
+@@ -290,7 +290,7 @@ ld_perform_outreloc(Rel_desc * orsp, Ofl_desc * ofl, Boolean *remain_seen)
+ 	} else if (orsp->rel_flags & FLG_REL_BSS) {
+ 		/*
+ 		 * This must be a R_386_COPY.  For these set the roffset to
+-		 * point to the new symbols location.
++		 * point to the new symbol's location.
+ 		 */
+ 		osp = ofl->ofl_isbss->is_osdesc;
+ 		roffset = (Word)value;
+@@ -800,7 +800,7 @@ ld_do_activerelocs(Ofl_desc *ofl)
+ 		else if (ELF_ST_TYPE(sdp->sd_sym->st_info) == STT_SECTION) {
+ 			/*
+ 			 * The value for a symbol pointing to a SECTION
+-			 * is based off of that sections position.
++			 * is based off of that section's position.
+ 			 */
+ 			if (sdp->sd_isc->is_flags & FLG_IS_RELUPD) {
+ 				Sym_desc	*sym;
+diff --git a/usr/src/cmd/sgs/libld/common/map_core.c b/usr/src/cmd/sgs/libld/common/map_core.c
+index 6d0bef1..1b16c3b 100644
+--- a/usr/src/cmd/sgs/libld/common/map_core.c
++++ b/usr/src/cmd/sgs/libld/common/map_core.c
+@@ -916,6 +916,11 @@ cexp_ident_init(void)
+ 		if (cexp_ident_add(NULL, MSG_ORIG(MSG_STR_USPARC)) == 0)
+ 			return (FALSE);
+ 		break;
++
++	case EM_ARM:
++		if (cexp_ident_add(NULL, MSG_ORIG(MSG_STR_UARM)) == 0)
++			return (FALSE);
++		break;
+ 	}
+ 
+ 	/* true is always defined */
+diff --git a/usr/src/cmd/sgs/link_audit/Makefile b/usr/src/cmd/sgs/link_audit/Makefile
+index 7239f05..b0d8bb4 100644
+--- a/usr/src/cmd/sgs/link_audit/Makefile
++++ b/usr/src/cmd/sgs/link_audit/Makefile
+@@ -60,7 +60,8 @@ $(ROOTDEMODIRS) :=	DIRMODE =	755
+ 
+ 
+ 
+-SUBDIRS=	$(MACH)
++SUBDIRS=		$(MACH)
++$(BUILD64)SUBDIRS +=	$(MACH64)
+ 
+ all:=		TARGET=	all
+ install:=	TARGET=	install
+@@ -81,9 +82,6 @@ package install : \
+ 
+ $(SUBDIRS):	FRC
+ 		@cd $@; pwd; $(MAKE) $(TARGET)
+-		@if [ -d $(MACH64) ]; then                      \
+-			cd $(MACH64); pwd; $(MAKE) $(TARGET);   \
+-		else /bin/true; fi
+ 
+ $(ROOTDEMODIRS):
+ 	$(INS.dir)
+diff --git a/usr/src/cmd/strings/Makefile b/usr/src/cmd/strings/Makefile
+index 48aa4d1..6459c8b 100644
+--- a/usr/src/cmd/strings/Makefile
++++ b/usr/src/cmd/strings/Makefile
+@@ -18,19 +18,16 @@
+ #
+ # CDDL HEADER END
+ #
+-#
+-#ident	"%Z%%M%	%I%	%E% SMI"
+-#
+ # Copyright 2008 Sun Microsystems, Inc.  All rights reserved.
+ # Use is subject to license terms.
+ #
+-# cmd/strings/Makefile
+ 
+-PROG:sh=	basename `pwd`
++PROG= strings
+ 
+ include ../Makefile.cmd
+ 
+-SUBDIRS	= 	$(MACH) $(MACH64)
++SUBDIRS	= 		$(MACH)
++$(BUILD64)SUBDIRS +=	$(MACH64)
+ 
+ all	:=	TARGET = all
+ install	:=	TARGET = install
+diff --git a/usr/src/common/fs/ufsops.c b/usr/src/common/fs/ufsops.c
+index d4e7826..3c5c72c 100644
+--- a/usr/src/common/fs/ufsops.c
++++ b/usr/src/common/fs/ufsops.c
+@@ -48,6 +48,7 @@ extern void cf_seek(fileid_t *, off_t, int);
+ extern int cf_read(fileid_t *, caddr_t, size_t);
+ 
+ int bootrd_debug;
++
+ #ifdef _BOOT
+ #define	dprintf	if (bootrd_debug) printf
+ #else
+@@ -488,7 +489,7 @@ getblock_noopt(fileid_t *filep)
+ static ssize_t
+ bufs_read(int fd, caddr_t buf, size_t count)
+ {
+-	size_t i, j;
++	ssize_t i, j;
+ 	caddr_t	n;
+ 	int rcount;
+ 	fileid_t *filep;
+diff --git a/usr/src/common/mapfiles/gen/Makefile b/usr/src/common/mapfiles/gen/Makefile
+index 6990ae5..d41a813 100644
+--- a/usr/src/common/mapfiles/gen/Makefile
++++ b/usr/src/common/mapfiles/gen/Makefile
+@@ -74,9 +74,9 @@ clobber:	clean
+ $(MACH)_cc_map.noexeglobs :=	LINK =	$(LINK.c)
+ $(MACH64)_cc_map.noexeglobs :=	LINK =	$(LINK64.c)
+ 
+-$(MACH)_gcc_map.noexeglobs :=	CC =	$(ONBLD_TOOLS)/bin/$(MACH)/cw -_gcc
++$(MACH)_gcc_map.noexeglobs :=	CC =	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.$(MACH) -_gcc
+ $(MACH)_gcc_map.noexeglobs :=	LINK =	$(LINK.c)
+-$(MACH64)_gcc_map.noexeglobs :=	CC =	$(ONBLD_TOOLS)/bin/$(MACH)/cw -_gcc
++$(MACH64)_gcc_map.noexeglobs :=	CC =	$(ONBLD_TOOLS)/bin/$(NATIVE_MACH)/cw.$(MACH) -_gcc
+ $(MACH64)_gcc_map.noexeglobs :=	LINK =	$(LINK64.c)
+  
+ # This generic target creates two dynamic executables from an empty "main"
+@@ -109,3 +109,12 @@ $(MACH64)_gcc_map.noexeglobs :=	LINK =	$(LINK64.c)
+ 	$(GREP) MAP-TAIL $(TEMPLATE2) | \
+ 	    $(SED) -e "s/	*# MAP-TAIL//"		>> $@
+ 	$(RM) $(SYMS1) $(SYMS2) $(MAIN1) $(MAIN2)
++
++#
++# We do not have a crt.1 yet. As such we do not have a real mapfile that we can
++# build. However, this is a part of dmake setup but not used in uts. As such for
++# now we generate a simple file and watch as this fails marvelously.
++#
++arm_cc_map.noexeglobs arm_gcc_map.noexeglobs:
++	echo "This is not a valid mapfile. See common/mapfiles/gen/Makefile" > \
++	    $@
+diff --git a/usr/src/lib/Makefile.lib b/usr/src/lib/Makefile.lib
+index d891e41..4de2379 100644
+--- a/usr/src/lib/Makefile.lib
++++ b/usr/src/lib/Makefile.lib
+@@ -193,10 +193,12 @@ $(PICS)  :=	sparc_CFLAGS += -xregs=no%appl $(sparc_C_PICFLAGS)
+ $(PICS)  :=	sparcv9_CFLAGS += -xregs=no%appl $(sparcv9_C_PICFLAGS)
+ $(PICS)  :=	i386_CFLAGS += $(i386_C_PICFLAGS)
+ $(PICS)  :=	amd64_CFLAGS += $(amd64_C_PICFLAGS)
++$(PICS)  :=	arm_CFLAGS +=	$(arm_C_PICFLAGS)
+ $(PICS)  :=	CCFLAGS += $(CC_PICFLAGS)
+ $(PICS)  :=	CPPFLAGS += -DPIC -D_REENTRANT
+ $(PICS)  :=	sparcv9_CCFLAGS += -xregs=no%appl $(sparcv9_CC_PICFLAGS)
+ $(PICS)  :=	amd64_CCFLAGS += $(amd64_CC_PICFLAGS)
++$(PICS)  :=	arm_CCFLAGS += $(arm_CC_PICFLAGS)
+ $(PICS)  :=	CFLAGS += $(CTF_FLAGS)
+ $(PICS)	 :=	CFLAGS64 += $(CTF_FLAGS)
+ $(PICS)  :=	CTFCONVERT_POST = $(CTFCONVERT_O)
+diff --git a/usr/src/lib/libaio/Makefile b/usr/src/lib/libaio/Makefile
+index 6cb7a4f..1c83e36 100644
+--- a/usr/src/lib/libaio/Makefile
++++ b/usr/src/lib/libaio/Makefile
+@@ -25,7 +25,8 @@
+ 
+ include		../Makefile.lib
+ 
+-SUBDIRS =	$(MACH) $(BUILD64) $(MACH64)
++SUBDIRS =		$(MACH)
++$(BUILD64)SUBDIRS +=	$(MACH64)
+ 
+ all :=		TARGET= all
+ clean :=	TARGET= clean
+diff --git a/usr/src/lib/libast/Makefile b/usr/src/lib/libast/Makefile
+index 2cd1e2b..c9bbc80 100644
+--- a/usr/src/lib/libast/Makefile
++++ b/usr/src/lib/libast/Makefile
+@@ -147,6 +147,9 @@ HDRDIR32= $(MACH)/include/ast
+ HDRDIR64= $(MACH64)/include/ast
+ include ../Makefile.asthdr
+ 
++# XXXARM: I'm not wading into this swamp right now.
++$(ARM_BLD)HDRS=
++
+ install_h: $(ROOTHDRS)
+ 
+ # We don't check these header files because they're owned by AT&T/AST
+diff --git a/usr/src/lib/libc/Makefile b/usr/src/lib/libc/Makefile
+index 75a6406..ad46e64 100644
+--- a/usr/src/lib/libc/Makefile
++++ b/usr/src/lib/libc/Makefile
+@@ -151,7 +151,9 @@ lib64:	$(MACH_COMP) $(MACHLIBS64) $(MACH64)/$(LIB_PIC) $(VARIANTLIBS64)
+ 		exit 1; \
+ 	fi
+ 
+-$(MACH)/assym.h $(MACH64)/assym.h:
++ASSYMS= $(MACH)/assym.h
++$(BUILD64)ASSYMS += $(MACH64)/assym.h
++$(ASSYMS):
+ 	@cd $(@D); $(MAKE) assym.h
+ 
+ $(VARIANTLIBS): FRC
+@@ -181,7 +183,7 @@ inslib64:	$(ROOTFS_LIBS64) $(ROOTFS_LINKS64) \
+ 
+ install_h: all_h $(ROOTHDRS)
+ 
+-all_h:	$(MACH)/assym.h $(MACH64)/assym.h
++all_h:	$(ASSYMS)
+ 
+ check:	$(CHECKHDRS)
+ 
+diff --git a/usr/src/lib/libcmd/Makefile b/usr/src/lib/libcmd/Makefile
+index 45c808e..9d6ed01 100644
+--- a/usr/src/lib/libcmd/Makefile
++++ b/usr/src/lib/libcmd/Makefile
+@@ -47,6 +47,9 @@ HDRS=	\
+ 	cmd.h \
+ 	cmdext.h
+ 
++# XXXARM: Not playing this game
++$(ARM_BLD)HDRS=
++
+ HDRDIR32= $(MACH)/include/ast
+ HDRDIR64= $(MACH64)/include/ast
+ include ../Makefile.asthdr
+diff --git a/usr/src/lib/libdisasm/Makefile.com b/usr/src/lib/libdisasm/Makefile.com
+index adc0816..f248236 100644
+--- a/usr/src/lib/libdisasm/Makefile.com
++++ b/usr/src/lib/libdisasm/Makefile.com
+@@ -57,6 +57,8 @@ SRCS_i386=		$(COMDIR)/dis_i386.c \
+ SRCS_sparc=		$(COMDIR)/dis_sparc.c \
+ 			$(COMDIR)/dis_sparc_fmt.c \
+ 			$(COMDIR)/dis_sparc_instr.c
++SRCS_arm=		$(COMDIR)/dis_arm.c
++SRCS_aarch64=		$(COMDIR)/dis_aarch64.c
+ SRCS_s390x=		$(COMDIR)/dis_s390x.c
+ 
+ OBJECTS_i386=		dis_i386.o \
+@@ -64,6 +66,8 @@ OBJECTS_i386=		dis_i386.o \
+ OBJECTS_sparc=		dis_sparc.o \
+ 			dis_sparc_fmt.o \
+ 			dis_sparc_instr.o
++OBJECTS_arm=		dis_arm.o
++OBJECTS_aarch64=	dis_aarch64.o
+ OBJECTS_s390x=		dis_s390x.o
+ 
+ #
+@@ -74,6 +78,8 @@ OBJECTS_s390x=		dis_s390x.o
+ OBJECTS_library=	$(OBJECTS_common) \
+ 			$(OBJECTS_i386) \
+ 			$(OBJECTS_sparc) \
++			$(OBJECTS_arm) \
++			$(OBJECTS_aarch64) \
+ 			$(OBJECTS_s390x)
+ OBJECTS_standalone=	$(OBJECTS_common) \
+ 			$(OBJECTS_$(MACH))
+@@ -84,6 +90,8 @@ include $(SRC)/lib/Makefile.lib
+ SRCS_library=		$(SRCS_common) \
+ 			$(SRCS_i386) \
+ 			$(SRCS_sparc) \
++			$(SRCS_arm) \
++			$(SRCS_aarch64) \
+ 			$(SRCS_s390x)
+ SRCS_standalone=	$(SRCS_common) \
+ 			$(SRCS_$(MACH))
+diff --git a/usr/src/lib/libdisasm/common/libdisasm.c b/usr/src/lib/libdisasm/common/libdisasm.c
+index 97e64c8..e0b0a95 100644
+--- a/usr/src/lib/libdisasm/common/libdisasm.c
++++ b/usr/src/lib/libdisasm/common/libdisasm.c
+@@ -55,6 +55,12 @@ extern dis_arch_t dis_arch_sparc;
+ #if !defined(DIS_STANDALONE) || defined(__s390) || defined(__s390x)
+ extern dis_arch_t dis_arch_s390;
+ #endif
++#if !defined(DIS_STANDALONE) || defined(__arm__)
++extern dis_arch_t dis_arch_arm;
++#endif
++#if !defined(DIS_STANDALONE) || defined(__aarch64__)
++extern dis_arch_t dis_arch_aarch64;
++#endif
+ 
+ static dis_arch_t *dis_archs[] = {
+ #if !defined(DIS_STANDALONE) || defined(__i386) || defined(__amd64)
+@@ -66,6 +72,12 @@ static dis_arch_t *dis_archs[] = {
+ #if !defined(DIS_STANDALONE) || defined(__s390) || defined(__s390x)
+ 	&dis_arch_s390,
+ #endif
++#if !defined(DIS_STANDALONE) || defined(__arm__)
++	&dis_arch_arm,
++#endif
++#if !defined(DIS_STANDALONE) || defined(__aarch64__)
++	&dis_arch_aarch64,
++#endif
+ 	NULL
+ };
+ 
+diff --git a/usr/src/lib/libdisasm/common/libdisasm.h b/usr/src/lib/libdisasm/common/libdisasm.h
+index 7c35db4..1277ebc 100644
+--- a/usr/src/lib/libdisasm/common/libdisasm.h
++++ b/usr/src/lib/libdisasm/common/libdisasm.h
+@@ -55,6 +55,10 @@ typedef struct dis_handle dis_handle_t;
+ #define	DIS_S390_31		0x400
+ #define	DIS_S390_64		0x800
+ 
++/* arm disassembler flags (with some breathing room) */
++#define DIS_ARM			0x1000
++#define DIS_AARCH64		0x2000
++
+ /* generic disassembler flags */
+ #define	DIS_OCTAL		0x040
+ #define	DIS_NOIMMSYM		0x080
+@@ -62,7 +66,7 @@ typedef struct dis_handle dis_handle_t;
+ #define	DIS_ARCH_MASK		(DIS_SPARC_V8 | \
+ 		DIS_SPARC_V9 | DIS_SPARC_V9_SGI | DIS_SPARC_V9_OPL | \
+ 		DIS_X86_SIZE16 | DIS_X86_SIZE32 | DIS_X86_SIZE64 | \
+-		DIS_S370 | DIS_S390_31 | DIS_S390_64)
++		DIS_ARM | DIS_AARCH64 | DIS_S370 | DIS_S390_31 | DIS_S390_64)
+ 
+ typedef int (*dis_lookup_f)(void *, uint64_t, char *, size_t, uint64_t *,
+     size_t *);
+diff --git a/usr/src/lib/libdll/Makefile b/usr/src/lib/libdll/Makefile
+index 6fda0f6..4e4bcaa 100644
+--- a/usr/src/lib/libdll/Makefile
++++ b/usr/src/lib/libdll/Makefile
+@@ -47,6 +47,9 @@ LIBRARY= 	libdll.a
+ HDRS= \
+ 	dlldefs.h
+ 
++# XXXARM: ... pabst blue ribbon
++$(ARM_BLD)HDRS=
++
+ HDRDIR32= $(MACH)/src/lib/libdll
+ HDRDIR64= $(MACH64)/src/lib/libdll
+ include ../Makefile.asthdr
+diff --git a/usr/src/lib/libdoor/Makefile b/usr/src/lib/libdoor/Makefile
+index 6cb7a4f..1c83e36 100644
+--- a/usr/src/lib/libdoor/Makefile
++++ b/usr/src/lib/libdoor/Makefile
+@@ -25,7 +25,8 @@
+ 
+ include		../Makefile.lib
+ 
+-SUBDIRS =	$(MACH) $(BUILD64) $(MACH64)
++SUBDIRS =		$(MACH)
++$(BUILD64)SUBDIRS +=	$(MACH64)
+ 
+ all :=		TARGET= all
+ clean :=	TARGET= clean
+diff --git a/usr/src/lib/libintl/Makefile b/usr/src/lib/libintl/Makefile
+index 6cb7a4f..a02e521 100644
+--- a/usr/src/lib/libintl/Makefile
++++ b/usr/src/lib/libintl/Makefile
+@@ -25,7 +25,8 @@
+ 
+ include		../Makefile.lib
+ 
+-SUBDIRS =	$(MACH) $(BUILD64) $(MACH64)
++SUBDIRS =		$(MACH)
++$(BUILD64)SUBDIRS += 	$(MACH64)
+ 
+ all :=		TARGET= all
+ clean :=	TARGET= clean
+diff --git a/usr/src/lib/libkrb5/Makefile b/usr/src/lib/libkrb5/Makefile
+index 07a5fcc..7b0baae 100644
+--- a/usr/src/lib/libkrb5/Makefile
++++ b/usr/src/lib/libkrb5/Makefile
+@@ -27,7 +27,8 @@
+ 
+ include		../Makefile.lib
+ 
+-SUBDIRS =	$(MACH) $(BUILD64) $(MACH64)
++SUBDIRS =		$(MACH)
++$(BUILD64)SUBDIRS +=	$(MACH64)
+ 
+ INSTALLED_HDRS = \
+ 		com_err.h krb5.h locate_plugin.h
+diff --git a/usr/src/lib/libmd/Makefile b/usr/src/lib/libmd/Makefile
+index 137586a..1182edf 100644
+--- a/usr/src/lib/libmd/Makefile
++++ b/usr/src/lib/libmd/Makefile
+@@ -28,7 +28,8 @@ include		$(SRC)/lib/Makefile.lib
+ 
+ $(SPARC_BLD)CAPDIR = capabilities
+ 
+-SUBDIRS=	$(MACH) $(BUILD64) $(MACH64)
++SUBDIRS=		$(MACH)
++$(BUILD64)SUBDIRS +=	$(MACH64)
+ 
+ HDRS =		md4.h md5.h sha1.h sha2.h skein.h
+ HDRDIR =	common
+@@ -50,8 +51,7 @@ install_h:	$(ROOTHDRS)
+ 
+ check:		$(CHECKHDRS)
+ 
+-$(CAPDIR) \
+-$(SUBDIRS):	FRC
++$(CAPDIR) $(SUBDIRS):	FRC
+ 		@cd $@; pwd; $(MAKE) $(TARGET)
+ 
+ FRC:
+diff --git a/usr/src/lib/libmd5/Makefile b/usr/src/lib/libmd5/Makefile
+index 6cb7a4f..0ed4f44 100644
+--- a/usr/src/lib/libmd5/Makefile
++++ b/usr/src/lib/libmd5/Makefile
+@@ -25,7 +25,8 @@
+ 
+ include		../Makefile.lib
+ 
+-SUBDIRS =	$(MACH) $(BUILD64) $(MACH64)
++SUBDIRS =	$(MACH)
++$(BUILD64)SUBDIRS += $(MACH64)
+ 
+ all :=		TARGET= all
+ clean :=	TARGET= clean
+diff --git a/usr/src/lib/libpthread/Makefile b/usr/src/lib/libpthread/Makefile
+index 6cb7a4f..1c83e36 100644
+--- a/usr/src/lib/libpthread/Makefile
++++ b/usr/src/lib/libpthread/Makefile
+@@ -25,7 +25,8 @@
+ 
+ include		../Makefile.lib
+ 
+-SUBDIRS =	$(MACH) $(BUILD64) $(MACH64)
++SUBDIRS =		$(MACH)
++$(BUILD64)SUBDIRS +=	$(MACH64)
+ 
+ all :=		TARGET= all
+ clean :=	TARGET= clean
+diff --git a/usr/src/lib/librt/Makefile b/usr/src/lib/librt/Makefile
+index 6cb7a4f..1c83e36 100644
+--- a/usr/src/lib/librt/Makefile
++++ b/usr/src/lib/librt/Makefile
+@@ -25,7 +25,8 @@
+ 
+ include		../Makefile.lib
+ 
+-SUBDIRS =	$(MACH) $(BUILD64) $(MACH64)
++SUBDIRS =		$(MACH)
++$(BUILD64)SUBDIRS +=	$(MACH64)
+ 
+ all :=		TARGET= all
+ clean :=	TARGET= clean
+diff --git a/usr/src/lib/libsched/Makefile b/usr/src/lib/libsched/Makefile
+index 6cb7a4f..1c83e36 100644
+--- a/usr/src/lib/libsched/Makefile
++++ b/usr/src/lib/libsched/Makefile
+@@ -25,7 +25,8 @@
+ 
+ include		../Makefile.lib
+ 
+-SUBDIRS =	$(MACH) $(BUILD64) $(MACH64)
++SUBDIRS =		$(MACH)
++$(BUILD64)SUBDIRS +=	$(MACH64)
+ 
+ all :=		TARGET= all
+ clean :=	TARGET= clean
+diff --git a/usr/src/lib/libshell/Makefile b/usr/src/lib/libshell/Makefile
+index b584728..9ce59b9 100644
+--- a/usr/src/lib/libshell/Makefile
++++ b/usr/src/lib/libshell/Makefile
+@@ -48,7 +48,10 @@ HDRS= \
+ 	history.h \
+ 	nval.h \
+ 	shell.h
+-	
++
++# XXXARM: ... damn spot
++$(ARM_BLD)HDRS=
++
+ HDRDIR32= $(MACH)/include/ast
+ HDRDIR64= $(MACH64)/include/ast
+ include ../Makefile.asthdr
+diff --git a/usr/src/lib/libsum/Makefile b/usr/src/lib/libsum/Makefile
+index 7e32109..ea516cd 100644
+--- a/usr/src/lib/libsum/Makefile
++++ b/usr/src/lib/libsum/Makefile
+@@ -47,6 +47,9 @@ LIBRARY= 	libsum.a
+ HDRS= \
+ 	sum.h
+ 
++# XXXARM: ... and your little dog, too
++$(ARM_BLD)HDRS=
++
+ HDRDIR32= $(MACH)/include/ast
+ HDRDIR64= $(MACH64)/include/ast
+ include ../Makefile.asthdr
+diff --git a/usr/src/lib/libthread/Makefile b/usr/src/lib/libthread/Makefile
+index 6cb7a4f..1c83e36 100644
+--- a/usr/src/lib/libthread/Makefile
++++ b/usr/src/lib/libthread/Makefile
+@@ -25,7 +25,8 @@
+ 
+ include		../Makefile.lib
+ 
+-SUBDIRS =	$(MACH) $(BUILD64) $(MACH64)
++SUBDIRS =		$(MACH)
++$(BUILD64)SUBDIRS +=	$(MACH64)
+ 
+ all :=		TARGET= all
+ clean :=	TARGET= clean
+diff --git a/usr/src/lib/libunistat/Makefile.com b/usr/src/lib/libunistat/Makefile.com
+index 522a938..911e79e 100644
+--- a/usr/src/lib/libunistat/Makefile.com
++++ b/usr/src/lib/libunistat/Makefile.com
+@@ -160,7 +160,7 @@ spcs_etext.h: $(ERRGEN) $(MSGS)
+ 	$(CAT) $(MSGS) $(SRCDIR)/spcs_etext.stub >> $@
+ 	$(SED) "s/	\"/	gettext(\"/" < $@ |\
+ 		 sed "s/\",/\"),/" > temp 
+-	xgettext -d unistat temp ; rm temp
++	$(XGETTEXT) -d unistat temp ; rm temp
+ 
+ spcs_errors.h: $(ERRGEN) $(EDEFS)
+ 	@echo $(COMMENT) > $@
+diff --git a/usr/src/lib/libw/Makefile b/usr/src/lib/libw/Makefile
+index 6cb7a4f..0ed4f44 100644
+--- a/usr/src/lib/libw/Makefile
++++ b/usr/src/lib/libw/Makefile
+@@ -25,7 +25,8 @@
+ 
+ include		../Makefile.lib
+ 
+-SUBDIRS =	$(MACH) $(BUILD64) $(MACH64)
++SUBDIRS =	$(MACH)
++$(BUILD64)SUBDIRS += $(MACH64)
+ 
+ all :=		TARGET= all
+ clean :=	TARGET= clean
+diff --git a/usr/src/lib/libxnet/Makefile b/usr/src/lib/libxnet/Makefile
+index 6cb7a4f..1c83e36 100644
+--- a/usr/src/lib/libxnet/Makefile
++++ b/usr/src/lib/libxnet/Makefile
+@@ -25,7 +25,8 @@
+ 
+ include		../Makefile.lib
+ 
+-SUBDIRS =	$(MACH) $(BUILD64) $(MACH64)
++SUBDIRS =		$(MACH)
++$(BUILD64)SUBDIRS +=	$(MACH64)
+ 
+ all :=		TARGET= all
+ clean :=	TARGET= clean
+diff --git a/usr/src/lib/pkcs11/libsoftcrypto/Makefile b/usr/src/lib/pkcs11/libsoftcrypto/Makefile
+index 96d8d81..4d2b0ff 100644
+--- a/usr/src/lib/pkcs11/libsoftcrypto/Makefile
++++ b/usr/src/lib/pkcs11/libsoftcrypto/Makefile
+@@ -26,7 +26,8 @@
+ include		$(SRC)/lib/Makefile.lib
+ 
+ CAPDIR =	capabilities
+-SUBDIRS =	$(MACH) $(BUILD64) $(MACH64) $(PLATFORMS)
++SUBDIRS =		$(MACH) $(PLATFORMS)
++$(BUILD64)SUBDIRS +=	$(MACH64)
+ 
+ all :=		TARGET= all
+ clean :=	TARGET= clean
+diff --git a/usr/src/man/man1/elfdump.1 b/usr/src/man/man1/elfdump.1
+index c27e7ae..e40e6b1 100644
+--- a/usr/src/man/man1/elfdump.1
++++ b/usr/src/man/man1/elfdump.1
+@@ -11,13 +11,13 @@
+ .\"  If applicable, add the following below this CDDL HEADER, with the fields
+ .\" enclosed by brackets "[]" replaced with your own identifying information:
+ .\" Portions Copyright [yyyy] [name of copyright owner]
+-.TH ELFDUMP 1 "Apr 3, 2009"
++.TH ELFDUMP 1 "Jan 18, 2013"
+ .SH NAME
+ elfdump \- dumps selected parts of an object file
+ .SH SYNOPSIS
+ .LP
+ .nf
+-\fBelfdump\fR [\fB-cCdegGhHiklmnPrsSuvy\fR] [\fB-p | -w file\fR] [\fB-I\fR \fIindex-expr\fR]
++\fBelfdump\fR [\fB-acCdegGhHiklmnPrsSuvy\fR] [\fB-p | -w file\fR] [\fB-I\fR \fIindex-expr\fR]
+      [\fB-N\fR \fIname\fR] [\fB-O\fR \fIosabi\fR] [\fB-T\fR \fItype\fR] \fIfilename\fR...
+ .fi
+ 
+@@ -99,6 +99,15 @@ The following options are supported:
+ .sp
+ .ne 2
+ .na
++\fB-a\fR
++.ad
++.RS 18n
++Dumps the contents of ARM attributes sections
++.RE
++
++.sp
++.ne 2
++.na
+ \fB\fB-c\fR\fR
+ .ad
+ .RS 18n
+diff --git a/usr/src/pkg/manifests/developer-build-onbld.mf b/usr/src/pkg/manifests/developer-build-onbld.mf
+index 5bc5cf9..5275513 100644
+--- a/usr/src/pkg/manifests/developer-build-onbld.mf
++++ b/usr/src/pkg/manifests/developer-build-onbld.mf
+@@ -60,17 +60,25 @@ dir path=opt/onbld/lib/python$(PYTHON_VERSION)/onbld/hgext
+ dir path=opt/onbld/man
+ dir path=opt/onbld/man/man1onbld
+ dir path=opt/onbld/share
+-$(i386_ONLY)file path=opt/onbld/bin/$(ARCH)/aw mode=0555
++file path=opt/onbld/bin/$(ARCH)/aw.arm mode=0555
++file path=opt/onbld/bin/$(ARCH)/aw.i386 mode=0555
++file path=opt/onbld/bin/$(ARCH)/aw.sparc mode=0555
+ $(i386_ONLY)file path=opt/onbld/bin/$(ARCH)/btxld mode=0555
+ $(sparc_ONLY)file path=opt/onbld/bin/$(ARCH)/chk4ubin mode=0555
+ file path=opt/onbld/bin/$(ARCH)/codereview mode=0555
+ file path=opt/onbld/bin/$(ARCH)/cscope-fast mode=0555
+-file path=opt/onbld/bin/$(ARCH)/ctfconvert mode=0555
++file path=opt/onbld/bin/$(ARCH)/ctfconvert.arm mode=0555
++file path=opt/onbld/bin/$(ARCH)/ctfconvert.i386 mode=0555
++file path=opt/onbld/bin/$(ARCH)/ctfconvert.sparc mode=0555
+ file path=opt/onbld/bin/$(ARCH)/ctfdump mode=0555
+-file path=opt/onbld/bin/$(ARCH)/ctfmerge mode=0555
++file path=opt/onbld/bin/$(ARCH)/ctfmerge.arm mode=0555
++file path=opt/onbld/bin/$(ARCH)/ctfmerge.i386 mode=0555
++file path=opt/onbld/bin/$(ARCH)/ctfmerge.sparc mode=0555
+ file path=opt/onbld/bin/$(ARCH)/ctfstabs mode=0555
+ file path=opt/onbld/bin/$(ARCH)/ctfstrip mode=0555
+-file path=opt/onbld/bin/$(ARCH)/cw mode=0555
++file path=opt/onbld/bin/$(ARCH)/cw.arm mode=0555
++file path=opt/onbld/bin/$(ARCH)/cw.i386 mode=0555
++file path=opt/onbld/bin/$(ARCH)/cw.sparc mode=0555
+ $(i386_ONLY)file path=opt/onbld/bin/$(ARCH)/elfextract mode=0555
+ file path=opt/onbld/bin/$(ARCH)/findunref mode=0555
+ $(sparc_ONLY)file path=opt/onbld/bin/$(ARCH)/forth mode=0555
+@@ -266,6 +274,10 @@ license usr/src/tools/ctf/dwarf/THIRDPARTYLICENSE \
+     license=usr/src/tools/ctf/dwarf/THIRDPARTYLICENSE
+ license usr/src/tools/onbld/THIRDPARTYLICENSE \
+     license=usr/src/tools/onbld/THIRDPARTYLICENSE
++link path=opt/onbld/bin/$(ARCH)/aw target=aw.$(ARCH)
++link path=opt/onbld/bin/$(ARCH)/ctfconvert target=ctfconvert.$(ARCH)
++link path=opt/onbld/bin/$(ARCH)/ctfmerge target=ctfmerge.$(ARCH)
++link path=opt/onbld/bin/$(ARCH)/cw target=cw.$(ARCH)
+ link path=opt/onbld/bin/$(ARCH)/dmake target=make
+ link path=opt/onbld/bin/git-nits target=git-pbchk
+ link path=opt/onbld/lib/python target=python$(PYTHON_VERSION)
+diff --git a/usr/src/pkg/manifests/system-header.mf b/usr/src/pkg/manifests/system-header.mf
+index 4ccc846..c2a159a 100644
+--- a/usr/src/pkg/manifests/system-header.mf
++++ b/usr/src/pkg/manifests/system-header.mf
+@@ -946,6 +946,7 @@ file path=usr/include/sys/edonr.h
+ file path=usr/include/sys/efi_partition.h
+ file path=usr/include/sys/elf.h
+ file path=usr/include/sys/elf_386.h
++file path=usr/include/sys/elf_ARM.h
+ file path=usr/include/sys/elf_SPARC.h
+ file path=usr/include/sys/elf_amd64.h
+ file path=usr/include/sys/elf_notes.h
+diff --git a/usr/src/prototypes/prototype.py b/usr/src/prototypes/prototype.py
+index 98d0774..5bb5e93 100644
+--- a/usr/src/prototypes/prototype.py
++++ b/usr/src/prototypes/prototype.py
+@@ -17,4 +17,3 @@
+ #
+ # Describe the purpose of this file here.
+ #
+-
+diff --git a/usr/src/test/util-tests/tests/dis/Makefile b/usr/src/test/util-tests/tests/dis/Makefile
+index 8756887..db39373 100644
+--- a/usr/src/test/util-tests/tests/dis/Makefile
++++ b/usr/src/test/util-tests/tests/dis/Makefile
+@@ -17,10 +17,50 @@ include $(SRC)/Makefile.master
+ 
+ ROOTOPTPKG = $(ROOT)/opt/util-tests
+ TESTDIR = $(ROOTOPTPKG)/tests/dis
+-ARCHS = i386 sparc
++ARCHS = aarch64 i386 sparc
+ 
+ PROG = distest
+ 
++	#tst.branch		
++AARCH64_TESTS =			\
++	tst.addsub-carry	\
++	tst.addsub-extreg	\
++	tst.addsub-imm		\
++	tst.addsub-shiftreg	\
++	tst.bitfield		\
++	tst.condcomp-imm	\
++	tst.condcomp-reg	\
++	tst.condsel		\
++	tst.dproc1		\
++	tst.dproc2		\
++	tst.dproc3		\
++	tst.exception		\
++	tst.extract		\
++	tst.ldst-exclusive	\
++	tst.ldst-literal	\
++	tst.ldst-noalloc	\
++	tst.ldst-prfm		\
++	tst.ldst-reg-imm-post	\
++	tst.ldst-reg-imm-pre	\
++	tst.ldst-reg-offset	\
++	tst.ldst-reg-pair	\
++	tst.ldst-reg-unpriv	\
++	tst.ldst-reg-unscaled	\
++	tst.ldst-reg-unsigned	\
++	tst.ldst-simd		\
++	tst.logical-imm		\
++	tst.logical-shiftreg	\
++	tst.movwide-imm		\
++	tst.simd-across		\
++	tst.simd-copy		\
++	tst.simd-ext		\
++	tst.simd-modimm		\
++	tst.simd-pairwise	\
++	tst.simd-scalarshift	\
++	tst.simd-tbl		\
++	tst.simd-trn		\
++	tst.system
++
+ SPARC_TESTS = \
+ 	tst.regs
+ 
+@@ -67,6 +107,9 @@ I386_TESTS =		\
+ 	tst.smap	\
+ 	tst.vmx
+ 
++AARCH64_FILES = $(AARCH64_TESTS:%=%.s) $(AARCH64_TESTS:%=%.out)
++ROOTAARCH64 = $(AARCH64_FILES:%=$(TESTDIR)/aarch64/%)
++
+ I386_FILES = $(I386_TESTS:%=%.s) $(I386_TESTS:%=%.out)
+ ROOTI386 = $(I386_FILES:%=$(TESTDIR)/i386/%)
+ 
+@@ -80,7 +123,7 @@ ARCHDIRS = $(ARCHS:%=$(TESTDIR)/%)
+ CMDS = $(PROG:%=$(TESTDIR)/%)
+ $(CMDS) := FILEMODE = 0555
+ 
+-install: $(CMDS) $(ROOTI386) $(ROOTSPARC)
++install: $(CMDS) $(ROOTAARCH64) $(ROOTI386) $(ROOTSPARC)
+ 
+ lint:
+ 
+@@ -88,7 +131,7 @@ clobber: clean
+ 
+ clean:
+ 
+-$(CMDS) $(ROOTI386) $(ROOTSPARC): $(TESTDIR) $(ARCHDIRS)
++$(CMDS) $(ROOTAARCH64) $(ROOTI386) $(ROOTSPARC): $(TESTDIR) $(ARCHDIRS)
+ 
+ $(TESTDIR) $(ARCHDIRS):
+ 	$(INS.dir)
+diff --git a/usr/src/test/util-tests/tests/dis/distest.ksh b/usr/src/test/util-tests/tests/dis/distest.ksh
+index 21b39a6..ed01d09 100644
+--- a/usr/src/test/util-tests/tests/dis/distest.ksh
++++ b/usr/src/test/util-tests/tests/dis/distest.ksh
+@@ -73,11 +73,13 @@ Usage: $dt_arg0  [-n] [ -p platform=pathtoas ]... [ test ]...
+ 
+ 	Runs all dis for the current platform or only specified tests if listed.
+ 
++	-d pathtodis		Run tests using the specified dis(1)
+ 	-n			Don't run default platform tests
+ 	-p platform=pathtoas	Run tests for platform using assembler. Should
+ 				either be an absolute path or a command on the
+ 				path.
+ USAGE
++	exit 1
+ }
+ 
+ #
+@@ -215,9 +217,15 @@ run_single_file()
+ 		test_one "-64" $sfile $cmpfile
+ 		;;
+ 	tst)
+-		test_one "-32" $sfile $cmpfile "(32-bit)"
+-		test_one "-64" $sfile $cmpfile "(64-bit)"
+-		;;
++		case "$arch" in
++		aarch64)
++			test_one "" $sfile $cmpfile
++			;;
++		*)
++			test_one "-32" $sfile $cmpfile "(32-bit)"
++			test_one "-64" $sfile $cmpfile "(64-bit)"
++			;;
++		esac
+ 	esac
+ }
+ 
+@@ -264,15 +272,19 @@ cd $(dirname $0) || fatal "failed to cd to test root"
+ dt_root=$PWD
+ cd $dt_origwd || fatal "failed to return to original dir"
+ 
+-while getopts ":np:" c $@; do
++while getopts ":d:np:" c $@; do
+ 	case "$c" in
++	d)
++		dt_dis="$OPTARG -qF libdis_test"
++		;;
+ 	n)
+ 		dt_nodefault="y"
+ 		;;
+ 	p)
++		OIFS="${IFS}"
+ 		IFS="="
+ 		set -A split $OPTARG
+-		IFS=" "
++		IFS="${OIFS}"
+ 		[[ ${#split[@]} -eq 2 ]] || usage "malformed -p option: $OPTARG"
+ 		dt_platforms[${split[0]}]=${split[1]}
+ 		;;
+diff --git a/usr/src/tools/Makefile b/usr/src/tools/Makefile
+index c8485b2..1060084 100644
+--- a/usr/src/tools/Makefile
++++ b/usr/src/tools/Makefile
+@@ -34,6 +34,7 @@ BOOT_SUBDIRS= \
+ 	cw
+ 
+ COMMON_SUBDIRS= \
++	aw \
+ 	codereview \
+ 	codesign \
+ 	cscope-fast \
+@@ -59,13 +60,13 @@ UNSHIPPED_SUBDIRS = \
+ 	elfsign \
+ 	mandoc
+ 
++# XXXARM: These should all become cross-capable.
+ sparc_SUBDIRS= \
+ 	chk4ubin \
+ 	stabs \
+ 	tokenize
+ 
+ i386_SUBDIRS=		\
+-	aw		\
+ 	elfextract	\
+ 	mbh_patch	\
+ 	btxld
+@@ -91,10 +92,10 @@ ROOTDIRS= \
+ 	$(ROOTOPT) \
+ 	$(ROOTONBLD) \
+ 	$(ROOTONBLD)/bin \
+-	$(ROOTONBLD)/bin/$(MACH) \
++	$(ROOTONBLD)/bin/$(NATIVE_MACH) \
+ 	$(ROOTONBLD)/lib \
+-	$(ROOTONBLD)/lib/$(MACH) \
+-	$(ROOTONBLD)/lib/$(MACH)/64 \
++	$(ROOTONBLD)/lib/$(NATIVE_MACH) \
++	$(ROOTONBLD)/lib/$(NATIVE_MACH)/64 \
+ 	$(ROOTONBLD)/lib/perl \
+ 	$(ROOTONBLD)/lib/python$(PYTHON_VERSION) \
+ 	$(ROOTONBLD)/lib/python$(PYTHON_VERSION)/onbld \
+diff --git a/usr/src/tools/Makefile.tools b/usr/src/tools/Makefile.tools
+index 2b6cf22..18bc570 100644
+--- a/usr/src/tools/Makefile.tools
++++ b/usr/src/tools/Makefile.tools
+@@ -27,16 +27,24 @@ include $(SRC)/Makefile.master
+ 
+ FILEMODE=	0555
+ 
++# All build tools are specifically for the host, and should always be built natively.
++CC=			$(NATIVECC)
++AS=			$(NATIVEAS)
++LD=			$(NATIVELD)
++CFLAGS=			$(NATIVE_CFLAGS)
++CTFMERGE=		$(NATIVECTFMERGE)
++CTFCONVERT=		$(NATIVECTFCONVERT)
++
+ TOOLS=			$(SRC)/tools
+-TOOLS_PROTO=		$(TOOLS)/proto/root_$(MACH)-nd
++TOOLS_PROTO=		$(TOOLS)/proto/root_$(NATIVE_MACH)-nd
+ ROOTOPT=		$(TOOLS_PROTO)/opt
+ ROOTONBLD=		$(ROOTOPT)/onbld
+ ROOTONBLDBIN=		$(ROOTONBLD)/bin
+-ROOTONBLDBINMACH=	$(ROOTONBLD)/bin/$(MACH)
++ROOTONBLDBINMACH=	$(ROOTONBLD)/bin/$(NATIVE_MACH)
+ ROOTONBLDETC=		$(ROOTONBLD)/etc
+ ROOTONBLDLIB=		$(ROOTONBLD)/lib
+-ROOTONBLDLIBMACH=	$(ROOTONBLD)/lib/$(MACH)
+-ROOTONBLDLIBMACH64=	$(ROOTONBLD)/lib/$(MACH)/64
++ROOTONBLDLIBMACH=	$(ROOTONBLD)/lib/$(NATIVE_MACH)
++ROOTONBLDLIBMACH64=	$(ROOTONBLD)/lib/$(NATIVE_MACH)/64
+ ROOTONBLDLIBPERL=	$(ROOTONBLD)/lib/perl
+ ROOTONBLDLIBPY=		$(ROOTONBLD)/lib/python
+ ROOTONBLDENV=		$(ROOTONBLD)/env
+@@ -49,6 +57,7 @@ ROOTONBLDSHARE=		$(ROOTONBLD)/share
+ 
+ CPPFLAGS=		-D_TS_ERRNO
+ ELFSIGN_O=		$(TRUE)
++CTFCONVERT_O=		$(TRUE)
+ LDLIBS=
+ LDFLAGS=		$(MAPFILE.NES:%=-M%) $(MAPFILE.NED:%=-M%) \
+ 			    $(MAPFILE.PGA:%=-M%)
+diff --git a/usr/src/tools/README.tools b/usr/src/tools/README.tools
+index 6cb51f02..b812a17 100644
+--- a/usr/src/tools/README.tools
++++ b/usr/src/tools/README.tools
+@@ -281,6 +281,11 @@ wsdiff
+ 	source change. This information is needed for patch construction.
+ 
+ 
++Tools which are relevant to a cross-compiled build exist in two forms, with
++the bare name as listed above (this version is always the one native to the
++current host), and as a version with an architecture suffix, indicating that
++it targets the given architecture.
++
+ How to do a full build
+ ----------------------
+ 
+diff --git a/usr/src/tools/aw/Makefile b/usr/src/tools/aw/Makefile
+index af2bf8f..eb15dbb 100644
+--- a/usr/src/tools/aw/Makefile
++++ b/usr/src/tools/aw/Makefile
+@@ -1,52 +1,35 @@
+ #
+-# CDDL HEADER START
++# This file and its contents are supplied under the terms of the
++# Common Development and Distribution License ("CDDL"), version 1.0.
++# You may only use this file in accordance with the terms of version
++# 1.0 of the CDDL.
+ #
+-# The contents of this file are subject to the terms of the
+-# Common Development and Distribution License, Version 1.0 only
+-# (the "License").  You may not use this file except in compliance
+-# with the License.
+-#
+-# You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE
+-# or http://www.opensolaris.org/os/licensing.
+-# See the License for the specific language governing permissions
+-# and limitations under the License.
+-#
+-# When distributing Covered Code, include this CDDL HEADER in each
+-# file and include the License file at usr/src/OPENSOLARIS.LICENSE.
+-# If applicable, add the following below this CDDL HEADER, with the
+-# fields enclosed by brackets "[]" replaced with your own identifying
+-# information: Portions Copyright [yyyy] [name of copyright owner]
+-#
+-# CDDL HEADER END
+-#
+-#
+-# Copyright 2004 Sun Microsystems, Inc.  All rights reserved.
+-# Use is subject to license terms.
++# A full copy of the text of the CDDL should have accompanied this
++# source.  A copy of the CDDL is also available via the Internet at
++# http://www.illumos.org/license/CDDL.
+ #
+ 
+-PROG	= aw
++SUBDIRS= aarch64 arm i386 sparc
+ 
+-include ../Makefile.tools
+-
+-CFLAGS += $(CCVERBOSE)
+-CERRWARN += -_gcc=-Wno-uninitialized
++install := TARGET = install
++all	:= TARGET = all
++lint	:= TARGET = lint
++clobber := TARGET = clobber
++clean	:= TARGET = clean
++check	:= TARGET = check
+ 
+-LINTFLAGS += -ux -Xa -errchk=locfmtchk,parentheses
++install all clean clobber check lint: $(SUBDIRS)
+ 
+-CPPFLAGS +=	-DDEFAULT_AS_DIR='"$(GNU_ROOT)/bin"'
+-CPPFLAGS +=	-DDEFAULT_AS64_DIR='"$(GNU_ROOT)/bin"'
+-CPPFLAGS +=	-DDEFAULT_M4_DIR='"/usr/ccs/bin"'
+-CPPFLAGS +=	-DDEFAULT_M4LIB_DIR='"/usr/ccs/lib"'
+-CPPFLAGS +=	-DDEFAULT_CPP_DIR='"/usr/ccs/lib"'
++$(SUBDIRS): FRC
++	@cd $@; pwd; $(MAKE) TARG_MACH=$@ $(TARGET)
+ 
+-.KEEP_STATE:
++FRC:
+ 
+-all:    $(PROG)
+-
+-install: all .WAIT $(ROOTONBLDMACHPROG)
++include ../Makefile.tools
+ 
+-lint:	lint_PROG
++install: $(ROOTONBLDMAN1FILES) $(ROOTONBLDBINMACH)/aw
+ 
+-clean:
++$(ROOTONBLDBINMACH)/aw: FRC
++	$(RM) $@; $(SYMLINK) aw.$(NATIVE_MACH) $@
+ 
+ include ../Makefile.targ
+diff --git a/usr/src/tools/aw/aw.c b/usr/src/tools/aw/aw.c
+index ba7d663..aaad902 100644
+--- a/usr/src/tools/aw/aw.c
++++ b/usr/src/tools/aw/aw.c
+@@ -1,3 +1,4 @@
++
+ /*
+  * CDDL HEADER START
+  *
+@@ -160,7 +161,6 @@ static void
+ copyuntil_path(FILE *in, FILE *out, int termchar,
+     const char *wspace, size_t wspace_len)
+ {
+-#define	PROTO_INC "/proto/root_i386/usr/include/"
+ #define	SYS_INC "/usr/include/"
+ 
+ 	static const size_t proto_inc_len = sizeof (PROTO_INC) - 1;
+@@ -503,19 +503,31 @@ main(int argc, char *argv[])
+ 	/*
+ 	 * Helpful when debugging, or when changing tool versions..
+ 	 */
+-	if ((cmd = getenv("AW_AS")) != NULL)
+-		strlcpy(as_pgm, cmd, sizeof (as_pgm));
+-	else {
+-		if ((dir = getenv("AW_AS_DIR")) == NULL)
+-			dir = DEFAULT_AS_DIR;	/* /usr/sfw/bin */
++	cmd = dir = NULL;
++	if ((cmd = getenv("AW_" AW_TARGET "_AS")) == NULL)
++		cmd = getenv("AW_AS");
++	if ((dir = getenv("AW_" AW_TARGET "_AS_DIR")) == NULL)
++		dir = getenv("AW_AS_DIR");
++
++	if (cmd != NULL) {
++		(void) strlcpy(as_pgm, cmd, sizeof (as_pgm));
++	} else {
++		if (dir == NULL)
++			dir = DEFAULT_AS_DIR;
+ 		(void) snprintf(as_pgm, sizeof (as_pgm), "%s/gas", dir);
+ 	}
+ 
+-	if ((cmd = getenv("AW_AS64")) != NULL)
+-		strlcpy(as64_pgm, cmd, sizeof (as64_pgm));
+-	else {
+-		if ((dir = getenv("AW_AS64_DIR")) == NULL)
+-			dir = DEFAULT_AS64_DIR;	/* /usr/sfw/bin */
++	cmd = dir = NULL;
++	if ((cmd = getenv("AW_" AW_TARGET "_AS64")) == NULL)
++		cmd = getenv("AW_AS64");
++	if ((dir = getenv("AW_" AW_TARGET "_AS64_DIR")) == NULL)
++		dir = getenv("AW_AS64_DIR");
++
++	if (cmd != NULL) {
++		(void) strlcpy(as64_pgm, cmd, sizeof (as64_pgm));
++	} else {
++		if (dir == NULL)
++			dir = DEFAULT_AS64_DIR;
+ 		(void) snprintf(as64_pgm, sizeof (as_pgm), "%s/gas", dir);
+ 	}
+ 
+@@ -730,13 +742,25 @@ main(int argc, char *argv[])
+ 		}
+ 	}
+ 
+-#if defined(__i386)
++#if defined(AW_TARGET_i386)
+ 	if (as64)
+ 		newae(as, "--64");
+ 	else
+ 		newae(as, "--32");
+ #endif
+ 
++	/*
++	 * gas for 32-bit arm defaults to a much older version of the arm
++	 * architecture than we can really support. Because of that, we instead
++	 * opt to make sure that we set the minimum architecture to armv6k, the
++	 * minimum of what we actually support.
++	 */
++#if defined(AW_TARGET_arm)
++	newae(as, "-march=armv6k");
++	newae(as, "-mfpu=vfpv2");
++	newae(as, "-mfloat-abi=hard");
++#endif
++
+ 	if (srcfile == NULL)
+ 		return (usage("no source file(s) specified"));
+ 	if (outfile == NULL)
+@@ -746,14 +770,14 @@ main(int argc, char *argv[])
+ 
+ 	asargv = aeltoargv(as);
+ 	if (cpp) {
+-#if defined(__sparc)
++#if defined(AW_TARGET_sparc)
+ 		newae(cpp, "-Dsparc");
+ 		newae(cpp, "-D__sparc");
+ 		if (as64)
+ 			newae(cpp, "-D__sparcv9");
+ 		else
+ 			newae(cpp, "-D__sparcv8");
+-#elif defined(__i386) || defined(__x86)
++#elif defined(AW_TARGET_i386)
+ 		if (as64) {
+ 			newae(cpp, "-D__x86_64");
+ 			newae(cpp, "-D__amd64");
+@@ -761,6 +785,10 @@ main(int argc, char *argv[])
+ 			newae(cpp, "-Di386");
+ 			newae(cpp, "-D__i386");
+ 		}
++#elif defined(AW_TARGET_arm)
++		newae(cpp, "-D__arm__");
++#elif defined(AW_TARGET_aarch64)
++		newae(cpp, "-D__aarch64__");
+ #else
+ #error	"need isa-dependent defines"
+ #endif
+diff --git a/usr/src/tools/ctf/Makefile.ctf b/usr/src/tools/ctf/Makefile.ctf
+index 7c5b041..b19bdf8 100644
+--- a/usr/src/tools/ctf/Makefile.ctf
++++ b/usr/src/tools/ctf/Makefile.ctf
+@@ -1,3 +1,4 @@
++
+ #
+ # CDDL HEADER START
+ #
+@@ -44,5 +45,6 @@ HDRDIRS= \
+ 	-I$(NATIVE_ADJUNCT)/include
+ 
+ CPPFLAGS += $(HDRDIRS)
++CPPFLAGS += -DCTF_TARGET_$(TARG_MACH)=1
+ CFLAGS += $(CCVERBOSE)
+ CERRWARN += -_gcc=-Wno-parentheses
+diff --git a/usr/src/tools/ctf/cvt/Makefile b/usr/src/tools/ctf/cvt/Makefile
+index 16d8280..d55eec1 100644
+--- a/usr/src/tools/ctf/cvt/Makefile
++++ b/usr/src/tools/ctf/cvt/Makefile
+@@ -23,11 +23,10 @@
+ # Copyright (c) 2001 by Sun Microsystems, Inc.
+ # All rights reserved.
+ #
+-#ident	"%Z%%M%	%I%	%E% SMI"
+ 
+ include		../../Makefile.tools
+ 
+-SUBDIRS	= $(MACH)
++SUBDIRS	= arm i386 sparc
+ 
+ all	:= TARGET= all
+ install	:= TARGET= install
+@@ -40,6 +39,14 @@ lint	:= TARGET= lint
+ install all clean clobber lint: $(SUBDIRS)
+ 
+ $(SUBDIRS): FRC
+-	@cd $@; pwd; $(MAKE) $(TARGET)
++	@cd $@; pwd; $(MAKE) TARG_MACH=$@ $(TARGET)
++
++install: $(ROOTONBLDBINMACH)/ctfconvert $(ROOTONBLDBINMACH)/ctfmerge
++
++$(ROOTONBLDBINMACH)/ctfmerge: FRC
++	$(RM) $@; $(SYMLINK) ctfmerge.$(NATIVE_MACH) $@
++
++$(ROOTONBLDBINMACH)/ctfconvert: FRC
++	$(RM) $@; $(SYMLINK) ctfconvert.$(NATIVE_MACH) $@
+ 
+ FRC:
+diff --git a/usr/src/tools/ctf/cvt/Makefile.com b/usr/src/tools/ctf/cvt/Makefile.com
+index 5385b37..c965767 100644
+--- a/usr/src/tools/ctf/cvt/Makefile.com
++++ b/usr/src/tools/ctf/cvt/Makefile.com
+@@ -28,7 +28,7 @@ include ../../Makefile.ctf
+ .KEEP_STATE:
+ .PARALLEL:
+ 
+-PROG=ctfconvert ctfmerge
++PROG=ctfconvert.$(TARG_MACH) ctfmerge.$(TARG_MACH)
+ 
+ GENSRCS= \
+ 	alist.c \
+@@ -69,7 +69,7 @@ LINTFILES=$(SRCS:%.c=%.ln)
+ 
+ DWARFLDFLAGS	= \
+ 	-L$(ROOTONBLDLIBMACH) \
+-	'-R$$ORIGIN/../../lib/$(MACH)' \
++	'-R$$ORIGIN/../../lib/$(NATIVE_MACH)' \
+ 	-ldwarf
+ DWARFCPPFLAGS	= -I../../dwarf/common
+ 
+@@ -85,6 +85,6 @@ CERRWARN	+= -_gcc=-Wno-switch
+ 
+ C99MODE		= $(C99_ENABLE)
+ 
+-ctfconvert	:= LDFLAGS += $(DWARFLDFLAGS)
++ctfconvert.$(TARG_MACH)	:= LDFLAGS += $(DWARFLDFLAGS)
+ 
+ dwarf.o dwarf.ln	:= CPPFLAGS += $(DWARFCPPFLAGS)
+diff --git a/usr/src/tools/ctf/cvt/Makefile.targ b/usr/src/tools/ctf/cvt/Makefile.targ
+index fba7b16..5f7897e 100644
+--- a/usr/src/tools/ctf/cvt/Makefile.targ
++++ b/usr/src/tools/ctf/cvt/Makefile.targ
+@@ -25,11 +25,11 @@
+ 
+ all: $(PROG)
+ 
+-ctfconvert: $(CVTOBJS)
++ctfconvert.$(TARG_MACH): $(CVTOBJS)
+ 	$(LINK.c) -o $@ $(CVTOBJS) $(LDLIBS)
+ 	$(POST_PROCESS)
+ 
+-ctfmerge: $(MRGOBJS)
++ctfmerge.$(TARG_MACH): $(MRGOBJS)
+ 	$(LINK.c) -o $@ $(MRGOBJS) $(LDLIBS)
+ 	$(POST_PROCESS)
+ 
+@@ -64,7 +64,7 @@ selftest: ctf_o ctfconvert_merge ctfmerge_merge
+ ctf_o:	$(OBJS:%.o=%_ctf)
+ 
+ %_ctf:	%.o ctfconvert
+-	LD_LIBRARY_PATH=$(DWARFSRCLIBDIR)/$(MACH) ./ctfconvert -l $@ $<
++	LD_LIBRARY_PATH=$(DWARFSRCLIBDIR)/$(NATIVE_MACH) ./ctfconvert -l $@ $<
+ 
+ ctfconvert_merge: ctf_o ctfmerge
+ 	./ctfmerge -l $@ -o ctfconvert $(CVTOBJS)
+diff --git a/usr/src/tools/ctf/cvt/dwarf.c b/usr/src/tools/ctf/cvt/dwarf.c
+index 5fdcd35..0e557dd 100644
+--- a/usr/src/tools/ctf/cvt/dwarf.c
++++ b/usr/src/tools/ctf/cvt/dwarf.c
+@@ -1348,10 +1348,14 @@ typedef struct fp_size_map {
+ static const fp_size_map_t fp_encodings[] = {
+ 	{ { 4, 4 }, { CTF_FP_SINGLE, CTF_FP_CPLX, CTF_FP_IMAGRY } },
+ 	{ { 8, 8 }, { CTF_FP_DOUBLE, CTF_FP_DCPLX, CTF_FP_DIMAGRY } },
+-#ifdef __sparc
++#if defined(CTF_TARGET_sparc)
+ 	{ { 16, 16 }, { CTF_FP_LDOUBLE, CTF_FP_LDCPLX, CTF_FP_LDIMAGRY } },
+-#else
++#elif defined(CTF_TARGET_i386)
+ 	{ { 12, 16 }, { CTF_FP_LDOUBLE, CTF_FP_LDCPLX, CTF_FP_LDIMAGRY } },
++#elif defined(CTF_TARGET_arm)
++	{ { 8, 16 }, { CTF_FP_LDOUBLE, CTF_FP_LDCPLX, CTF_FP_LDIMAGRY } },
++#else
++#error "unknown CTF_TARGET"
+ #endif
+ 	{ { 0, 0 } }
+ };
+diff --git a/usr/src/tools/ctf/dwarf/Makefile b/usr/src/tools/ctf/dwarf/Makefile
+index 55d333c..c63a922 100644
+--- a/usr/src/tools/ctf/dwarf/Makefile
++++ b/usr/src/tools/ctf/dwarf/Makefile
+@@ -2,11 +2,10 @@
+ # Copyright 2004 Sun Microsystems, Inc.  All rights reserved.
+ # Use is subject to license terms.
+ #
+-#ident	"%Z%%M%	%I%	%E% SMI"
+ 
+ include		../../Makefile.tools
+ 
+-SUBDIRS	= $(MACH)
++SUBDIRS	= $(NATIVE_MACH)
+ 
+ all	:= TARGET= all
+ install	:= TARGET= install
+diff --git a/usr/src/tools/ctf/dwarf/Makefile.com b/usr/src/tools/ctf/dwarf/Makefile.com
+index 51e788f..996f03b 100644
+--- a/usr/src/tools/ctf/dwarf/Makefile.com
++++ b/usr/src/tools/ctf/dwarf/Makefile.com
+@@ -66,6 +66,7 @@ OBJECTS=dwarf_abbrev.o		\
+ 	pro_weaks.o
+ 
+ include $(SRC)/lib/Makefile.lib
++include $(SRC)/tools/Makefile.tools
+ 
+ SRCS=	$(PICS:%.o=../common/%.c)
+ 
+@@ -100,4 +101,3 @@ $(DYNLIB) := CTFMERGE_POST= :
+ CTFCONVERT_O= :
+ 
+ include $(SRC)/lib/Makefile.targ
+-
+diff --git a/usr/src/tools/cw/Makefile b/usr/src/tools/cw/Makefile
+index 5350851..f9de1c5 100644
+--- a/usr/src/tools/cw/Makefile
++++ b/usr/src/tools/cw/Makefile
+@@ -23,45 +23,31 @@
+ # Use is subject to license terms.
+ #
+ 
+-PROG	= cw
++SUBDIRS = aarch64 arm i386 sparc
+ 
+-MAN1ONBLDFILES=	cw.1onbld
++install	:= TARGET = install
++all	:= TARGET = all
++lint	:= TARGET = lint
++clobber	:= TARGET = clobber
++clean	:= TARGET = clean
++check	:= TARGET = check
+ 
+-include ../Makefile.tools
+-
+-# Bootstrap problem -- we have to build cw before we can use it
+-i386_CC=		$(SPRO_VROOT)/bin/cc
+-sparc_CC=		$(SPRO_VROOT)/bin/cc
+-$(__GNUC)i386_CC=	$(GCC_ROOT)/bin/gcc
+-$(__GNUC)sparc_CC=	$(GCC_ROOT)/bin/gcc
+-
+-CFLAGS += $(CCVERBOSE)
+-
+-# Override CFLAGS.  This is needed only for bootstrap of cw.
+-$(__GNUC)CFLAGS=	-O -D__sun -Wall -Wno-unknown-pragmas -Werror \
+-			-std=gnu89 -nodefaultlibs
+-$(__SUNC)CFLAGS=	-xspace -Xa  -xildoff -errtags=yes -errwarn=%all \
+-			-xc99=%none    -W0,-xglobalstatic -v
++install all clean clobber check lint: $(SUBDIRS)
+ 
++$(SUBDIRS): FRC
++	@cd $@; pwd; $(MAKE) TARG_MACH=$@ $(TARGET)
+ 
+-$(__GNUC)LDLIBS +=	-lc
+-$(__GNUC)LDFLAGS= 	$(MAPFILE.NES:%=-Wl,-M%)
++FRC:
+ 
+-CPPFLAGS += -DDEFAULT_CC_DIR='"$(SPRO_VROOT)/bin"'
+-CPPFLAGS += -DDEFAULT_GCC_DIR='"$(GCC_ROOT)/bin"'
+-CPPFLAGS += -DDEFAULT_CPLUSPLUS_DIR='"$(SPRO_VROOT)/bin"'
+-CPPFLAGS += -DDEFAULT_GPLUSPLUS_DIR='"$(GCC_ROOT)/bin"'
++MAN1FILES =	cw.1
+ 
+-$(ROOTONBLDMAN1ONBLDFILES) := FILEMODE=      644
+-
+-.KEEP_STATE:
+-
+-all: $(PROG) $(MAN1ONBLDFILES)
++include ../Makefile.tools
+ 
+-install: all .WAIT $(ROOTONBLDMACHPROG) $(ROOTONBLDMAN1ONBLDFILES)
++$(ROOTONBLDMAN1FILES) := FILEMODE= 644
+ 
+-lint: lint_PROG
++install: $(ROOTONBLDMAN1FILES) $(ROOTONBLDBINMACH)/cw
+ 
+-clean:
++$(ROOTONBLDBINMACH)/cw: FRC
++	$(RM) $@; $(SYMLINK) cw.$(NATIVE_MACH) $@
+ 
+ include ../Makefile.targ
+diff --git a/usr/src/tools/cw/cw.c b/usr/src/tools/cw/cw.c
+index 3bc250d..79eae35 100644
+--- a/usr/src/tools/cw/cw.c
++++ b/usr/src/tools/cw/cw.c
+@@ -389,7 +389,7 @@ typedef struct xarch_table {
+  * The translation table for the -xarch= flag used in the Studio compilers.
+  */
+ static const xarch_table_t xtbl[] = {
+-#if defined(__x86)
++#if defined(CW_TARGET_i386)
+ 	{ "generic",	SS11 },
+ 	{ "generic64",	(SS11|M64), { "-m64", "-mtune=opteron" } },
+ 	{ "amd64",	(SS11|M64), { "-m64", "-mtune=opteron" } },
+@@ -397,7 +397,7 @@ static const xarch_table_t xtbl[] = {
+ 	{ "pentium_pro", SS11,	{ "-march=pentiumpro" } },
+ 	{ "sse",	SS11, { "-msse", "-mfpmath=sse" } },
+ 	{ "sse2",	SS11, { "-msse2", "-mfpmath=sse" } },
+-#elif defined(__sparc)
++#elif defined(CW_TARGET_sparc)
+ 	{ "generic",	(SS11|M32), { "-m32", "-mcpu=v8" } },
+ 	{ "generic64",	(SS11|M64), { "-m64", "-mcpu=v9" } },
+ 	{ "v8",		(SS11|M32), { "-m32", "-mcpu=v8", "-mno-v8plus" } },
+@@ -412,6 +412,13 @@ static const xarch_table_t xtbl[] = {
+ 	{ "sparc",	SS12, { "-mcpu=v9", "-mv8plus" } },
+ 	{ "sparcvis",	SS12, { "-mcpu=ultrasparc", "-mvis" } },
+ 	{ "sparcvis2",	SS12, { "-mcpu=ultrasparc3", "-mvis" } }
++#elif defined(CW_TARGET_arm)
++	{ "armv6",	SS12, { "-march=armv6k", "-mfpu=vfpv2", "-mfloat-abi=hard" } },
++	{ "armv7",	SS12, { "-march=armv7-a", "-mfpu=vfpv3-d16", "-mfloat-abi=hard" } }
++#elif defined(CW_TARGET_aarch64)
++	{ "aarch64",	SS12, { "-march=armv8-a" } }
++#else
++#error Unknown CW_TARGET
+ #endif
+ };
+ 
+@@ -420,12 +427,12 @@ static int xtbl_size = sizeof (xtbl) / sizeof (xarch_table_t);
+ static const char *progname;
+ 
+ static const char *xchip_tbl[] = {
+-#if defined(__x86)
++#if defined(CW_TARGET_i386)
+ 	"386",		"-mtune=i386", NULL,
+ 	"486",		"-mtune=i486", NULL,
+ 	"pentium",	"-mtune=pentium", NULL,
+ 	"pentium_pro",  "-mtune=pentiumpro", NULL,
+-#elif defined(__sparc)
++#elif defined(CW_TARGET_sparc)
+ 	"super",	"-mtune=supersparc", NULL,
+ 	"ultra",	"-mtune=ultrasparc", NULL,
+ 	"ultra3",	"-mtune=ultrasparc3", NULL,
+@@ -434,7 +441,7 @@ static const char *xchip_tbl[] = {
+ };
+ 
+ static const char *xcode_tbl[] = {
+-#if defined(__sparc)
++#if defined(CW_TARGET_sparc)
+ 	"abs32",	"-fno-pic", "-mcmodel=medlow", NULL,
+ 	"abs44",	"-fno-pic", "-mcmodel=medmid", NULL,
+ 	"abs64",	"-fno-pic", "-mcmodel=medany", NULL,
+@@ -445,19 +452,19 @@ static const char *xcode_tbl[] = {
+ };
+ 
+ static const char *xtarget_tbl[] = {
+-#if defined(__x86)
++#if defined(CW_TARGET_i386)
+ 	"pentium_pro",	"-march=pentiumpro", NULL,
+-#endif	/* __x86 */
++#endif	/* i386 */
+ 	NULL,		NULL
+ };
+ 
+ static const char *xregs_tbl[] = {
+-#if defined(__sparc)
++#if defined(CW_TARGET_sparc)
+ 	"appl",		"-mapp-regs", NULL,
+ 	"no%appl",	"-mno-app-regs", NULL,
+ 	"float",	"-mfpu", NULL,
+ 	"no%float",	"-mno-fpu", NULL,
+-#endif	/* __sparc */
++#endif	/* sparc */
+ 	NULL,		NULL
+ };
+ 
+@@ -658,7 +665,7 @@ do_gcc(cw_ictx_t *ctx)
+ 	newae(ctx->i_ae, "-fdiagnostics-show-option");
+ 	newae(ctx->i_ae, "-nodefaultlibs");
+ 
+-#if defined(__sparc)
++#if defined(CW_TARGET_sparc)
+ 	/*
+ 	 * The SPARC ldd and std instructions require 8-byte alignment of
+ 	 * their address operand.  gcc correctly uses them only when the
+@@ -761,13 +768,13 @@ do_gcc(cw_ictx_t *ctx)
+ 				nolibc = 1;
+ 				continue;
+ 			}
+-#if defined(__sparc)
++#if defined(CW_TARGET_sparc)
+ 			if (strcmp(arg, "-cg92") == 0) {
+ 				mflag |= xlate_xtb(ctx->i_ae, "v8");
+ 				xlate(ctx->i_ae, "super", xchip_tbl);
+ 				continue;
+ 			}
+-#endif	/* __sparc */
++#endif
+ 		}
+ 
+ 		switch ((c = arg[1])) {
+@@ -948,7 +955,7 @@ do_gcc(cw_ictx_t *ctx)
+ 			}
+ 			if (strcmp(arg, "-m64") == 0) {
+ 				newae(ctx->i_ae, "-m64");
+-#if defined(__x86)
++#if defined(CW_TARGET_i386)
+ 				newae(ctx->i_ae, "-mtune=opteron");
+ #endif
+ 				mflag |= M64;
+@@ -1140,7 +1147,7 @@ do_gcc(cw_ictx_t *ctx)
+ 				 */
+ 				break;
+ 			}
+-#if defined(__x86)
++#if defined(CW_TARGET_i386)
+ 			if (strcmp(arg, "-Wu,-xmodel=kernel") == 0) {
+ 				newae(ctx->i_ae, "-ffreestanding");
+ 				newae(ctx->i_ae, "-mno-red-zone");
+@@ -1152,7 +1159,7 @@ do_gcc(cw_ictx_t *ctx)
+ 				newae(ctx->i_ae, "-msave-args");
+ 				break;
+ 			}
+-#endif	/* __x86 */
++#endif	/* i386 */
+ 			error(arg);
+ 			break;
+ 		case 'X':
+@@ -1175,7 +1182,7 @@ do_gcc(cw_ictx_t *ctx)
+ 			if (arglen == 1)
+ 				error(arg);
+ 			switch (arg[2]) {
+-#if defined(__x86)
++#if defined(CW_TARGET_i386)
+ 			case '3':
+ 				if (strcmp(arg, "-x386") == 0) {
+ 					newae(ctx->i_ae, "-march=i386");
+@@ -1190,7 +1197,7 @@ do_gcc(cw_ictx_t *ctx)
+ 				}
+ 				error(arg);
+ 				break;
+-#endif	/* __x86 */
++#endif	/* i386 */
+ 			case 'a':
+ 				if (strncmp(arg, "-xarch=", 7) == 0) {
+ 					mflag |= xlate_xtb(ctx->i_ae, arg + 7);
+@@ -1264,7 +1271,7 @@ do_gcc(cw_ictx_t *ctx)
+ 					break;
+ 				error(arg);
+ 				break;
+-#if defined(__x86)
++#if defined(CW_TARGET_i386)
+ 			case 'm':
+ 				if (strcmp(arg, "-xmodel=kernel") == 0) {
+ 					newae(ctx->i_ae, "-ffreestanding");
+@@ -1275,7 +1282,7 @@ do_gcc(cw_ictx_t *ctx)
+ 				}
+ 				error(arg);
+ 				break;
+-#endif	/* __x86 */
++#endif	/* i386 */
+ 			case 'M':
+ 				if (strcmp(arg, "-xM") == 0) {
+ 					newae(ctx->i_ae, "-M");
+@@ -1445,7 +1452,7 @@ do_gcc(cw_ictx_t *ctx)
+ 	case 0:
+ 		/* FALLTHROUGH */
+ 	case M32:
+-#if defined(__sparc)
++#if defined(CW_TARGET_sparc)
+ 		/*
+ 		 * Only -m32 is defined and so put in the missing xarch
+ 		 * translation.
+@@ -1455,7 +1462,7 @@ do_gcc(cw_ictx_t *ctx)
+ #endif
+ 		break;
+ 	case M64:
+-#if defined(__sparc)
++#if defined(CW_TARGET_sparc)
+ 		/*
+ 		 * Only -m64 is defined and so put in the missing xarch
+ 		 * translation.
+@@ -1464,7 +1471,7 @@ do_gcc(cw_ictx_t *ctx)
+ #endif
+ 		break;
+ 	case SS12:
+-#if defined(__sparc)
++#if defined(CW_TARGET_sparc)
+ 		/* no -m32/-m64 flag used - this is an error for sparc builds */
+ 		(void) fprintf(stderr, "No -m32/-m64 flag defined\n");
+ 		exit(2);
+@@ -1476,7 +1483,7 @@ do_gcc(cw_ictx_t *ctx)
+ 	case (SS11|M64):
+ 		break;
+ 	case (SS12|M32):
+-#if defined(__sparc)
++#if defined(CW_TARGET_sparc)
+ 		/*
+ 		 * Need to add in further 32 bit options because with SS12
+ 		 * the xarch=sparcvis option can be applied to 32 or 64
+@@ -1595,20 +1602,32 @@ prepctx(cw_ictx_t *ctx)
+ 
+ 	switch (CIDX(CC(ctx), ctx->i_flags)) {
+ 		case CIDX(CW_C_CC, 0):
+-			program = getenv("CW_CC");
+-			dir = getenv("CW_CC_DIR");
++			if ((program = getenv("CW_" CW_TARGET "_CC")) == NULL)
++				program = getenv("CW_CC");
++			if ((dir = getenv("CW_" CW_TARGET "_CC_DIR")) == NULL)
++				dir = getenv("CW_CC_DIR");
+ 			break;
+ 		case CIDX(CW_C_CC, CW_F_CXX):
+-			program = getenv("CW_CPLUSPLUS");
+-			dir = getenv("CW_CPLUSPLUS_DIR");
++			if ((program = getenv("CW_" CW_TARGET "_CPLUSPLUS")) ==
++			    NULL)
++				program = getenv("CW_CPLUSPLUS");
++			if ((dir = getenv("CW_" CW_TARGET "_CPLUSPLUS_DIR")) ==
++			    NULL)
++				dir = getenv("CW_CPLUSPLUS_DIR");
+ 			break;
+ 		case CIDX(CW_C_GCC, 0):
+-			program = getenv("CW_GCC");
+-			dir = getenv("CW_GCC_DIR");
++			if ((program = getenv("CW_" CW_TARGET "_GCC")) == NULL)
++				program = getenv("CW_GCC");
++			if ((dir = getenv("CW_" CW_TARGET "_GCC_DIR")) == NULL)
++				dir = getenv("CW_GCC_DIR");
+ 			break;
+ 		case CIDX(CW_C_GCC, CW_F_CXX):
+-			program = getenv("CW_GPLUSPLUS");
+-			dir = getenv("CW_GPLUSPLUS_DIR");
++			if ((program = getenv("CW_" CW_TARGET "_GPLUSPLUS")) ==
++			    NULL)
++				program = getenv("CW_GPLUSPLUS");
++			if ((dir = getenv("CW_" CW_TARGET "_GPLUSPLUS_DIR")) ==
++			    NULL)
++				dir = getenv("CW_GPLUSPLUS_DIR");
+ 			break;
+ 	}
+ 
+diff --git a/usr/src/tools/make/lib/makestate/Makefile b/usr/src/tools/make/lib/makestate/Makefile
+index a6cf74d..92f0c06 100644
+--- a/usr/src/tools/make/lib/makestate/Makefile
++++ b/usr/src/tools/make/lib/makestate/Makefile
+@@ -11,9 +11,10 @@
+ 
+ # Copyright 2015, Richard Lowe.
+ 
+-include $(SRC)/Makefile.master
++include $(SRC)/tools/Makefile.tools
+ 
+-SUBDIRS=$(MACH) $(MACH64)
++SUBDIRS =		$(MACH)
++$(BUILD64)SUBDIRS +=	$(MACH64)
+ 
+ all	:=	TARGET = all
+ install :=	TARGET = install
+diff --git a/usr/src/tools/make/lib/makestate/Makefile.com b/usr/src/tools/make/lib/makestate/Makefile.com
+index 7f23242..afc042d 100644
+--- a/usr/src/tools/make/lib/makestate/Makefile.com
++++ b/usr/src/tools/make/lib/makestate/Makefile.com
+@@ -11,8 +11,6 @@
+ 
+ # Copyright 2015, Richard Lowe.
+ 
+-include $(SRC)/tools/Makefile.tools
+-
+ LIBRARY = libmakestate.a
+ VERS = .1
+ OBJECTS = ld_file.o lock.o
+@@ -20,6 +18,8 @@ OBJECTS = ld_file.o lock.o
+ include $(SRC)/lib/Makefile.lib
+ include ../../../Makefile.com
+ 
++include $(SRC)/tools/Makefile.tools
++
+ LIBS = $(DYNLIB)
+ SRCDIR = $(SRC)/cmd/make/lib/makestate
+ MAPFILES = $(SRCDIR)/mapfile-vers
+diff --git a/usr/src/tools/mandoc/Makefile b/usr/src/tools/mandoc/Makefile
+index eba26e7..b3f3c32 100644
+--- a/usr/src/tools/mandoc/Makefile
++++ b/usr/src/tools/mandoc/Makefile
+@@ -18,6 +18,10 @@ CMDDIR=		$(SRC)/cmd/mandoc
+ include		../Makefile.tools
+ include		$(CMDDIR)/Makefile.common
+ 
++# XXX: OS-5604
++CPPFLAGS +=	-_gcc=-nostdinc -I/usr/include -I$(NATIVE_ADJUNCT)/include
++LDFLAGS +=	-L$(NATIVE_ADJUNCT)/lib -R$(NATIVE_ADJUNCT)/lib
++
+ .KEEP_STATE:
+ 
+ all:		$(PROG)
+diff --git a/usr/src/tools/scripts/bldenv.sh b/usr/src/tools/scripts/bldenv.sh
+index f841a3c..0c42f61 100644
+--- a/usr/src/tools/scripts/bldenv.sh
++++ b/usr/src/tools/scripts/bldenv.sh
+@@ -23,6 +23,7 @@
+ #
+ # Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
+ # Copyright 2011 Nexenta Systems, Inc.  All rights reserved.
++# Copyright (c) 2013, Joyent, Inc.  All rights reserved.
+ # Copyright 2014 Garrett D'Amore <garrett@damore.org>
+ #
+ # Uses supplied "env" file, based on /opt/onbld/etc/env, to set shell variables
+@@ -149,6 +150,13 @@ while getopts -a "${progname}" "${USAGE}" OPT ; do
+ done
+ shift $((OPTIND-1))
+ 
++#
++# For now bldenv only supports debug builds.
++#
++flags.d=true
++SUFFIX=""
++
++
+ # test that the path to the environment-setting file was given
+ if (( $# < 1 )) ; then
+ 	usage
+@@ -266,8 +274,14 @@ fi
+ # update build-type variables
+ PKGARCHIVE="${PKGARCHIVE}${SUFFIX}"
+ 
+-# 	Set PATH for a build
+-PATH="/opt/onbld/bin:/opt/onbld/bin/${MACH}:/opt/SUNWspro/bin:/usr/ccs/bin:/usr/bin:/usr/sbin:/usr/ucb:/usr/etc:/usr/openwin/bin:/usr/sfw/bin:/opt/sfw/bin:."
++# 	Set PATH for a build, account for cross-build
++if [[ -n "$NATIVE_MACH" ]]; then
++	PATH="/opt/onbld/bin:/opt/onbld/bin/${NATIVE_MACH}"
++else
++	PATH="/opt/onbld/bin:/opt/onbld/bin/${MACH}"
++fi
++PATH="$PATH:/opt/SUNWspro/bin:/usr/ccs/bin:/usr/bin:/usr/sbin:/usr/ucb:/usr/etc:/usr/openwin/bin:/usr/sfw/bin:/opt/sfw/bin:."
++
+ if [[ "${SUNWSPRO}" != "" ]]; then 
+ 	export PATH="${SUNWSPRO}/bin:$PATH" 
+ fi 
+@@ -287,14 +301,11 @@ TOOLS_PROTO="${TOOLS}/proto/root_${MACH}-nd" ; export TOOLS_PROTO
+ if "${flags.t}" ; then
+ 	export ONBLD_TOOLS="${ONBLD_TOOLS:=${TOOLS_PROTO}/opt/onbld}"
+ 
+-	export STABS="${TOOLS_PROTO}/opt/onbld/bin/${MACH}/stabs"
+-	export CTFSTABS="${TOOLS_PROTO}/opt/onbld/bin/${MACH}/ctfstabs"
+-	export GENOFFSETS="${TOOLS_PROTO}/opt/onbld/bin/genoffsets"
+-
+-	export CTFCONVERT="${TOOLS_PROTO}/opt/onbld/bin/${MACH}/ctfconvert"
+-	export CTFMERGE="${TOOLS_PROTO}/opt/onbld/bin/${MACH}/ctfmerge"
+-
+-	PATH="${TOOLS_PROTO}/opt/onbld/bin/${MACH}:${PATH}"
++	if [[ -n "$NATIVE_MACH" ]]; then
++		PATH="${TOOLS_PROTO}/opt/onbld/bin/${NATIVE_MACH}:${PATH}"
++	else
++		PATH="${TOOLS_PROTO}/opt/onbld/bin/${MACH}:${PATH}"
++	fi
+ 	PATH="${TOOLS_PROTO}/opt/onbld/bin:${PATH}"
+ 	export PATH
+ fi
+@@ -353,6 +364,10 @@ export \
+ printf 'RELEASE      is %s\n'   "$RELEASE"
+ printf 'VERSION      is %s\n'   "$VERSION"
+ printf 'RELEASE_DATE is %s\n\n' "$RELEASE_DATE"
++if [[ -n "$NATIVE_MACH" && "$NATIVE_MACH" != "$MACH" ]]; then
++	printf 'Cross-building enabled\n'
++	printf 'Targeting %s on %s\n\n' "$MACH" "$NATIVE_MACH"
++fi
+ 
+ if [[ -f "$SRC/Makefile" ]] && egrep -s '^setup:' "$SRC/Makefile" ; then
+ 	print "The top-level 'setup' target is available \c"
+diff --git a/usr/src/tools/scripts/nightly.sh b/usr/src/tools/scripts/nightly.sh
+index a77d6f2..a7de97d 100644
+--- a/usr/src/tools/scripts/nightly.sh
++++ b/usr/src/tools/scripts/nightly.sh
+@@ -494,11 +494,10 @@ function use_tools {
+ 	TOOLSROOT=$1
+ 
+ 	#
+-	# If we're not building ON workspace, then the TOOLSROOT
+-	# settings here are clearly ignored by the workspace
+-	# makefiles, prepending nonexistent directories to PATH is
+-	# harmless, and we clearly do not wish to override
+-	# ONBLD_TOOLS.
++	# If we're not building an ON workspace, then the TOOLSROOT settings
++	# here are clearly ignored by the workspace makefiles, prepending
++	# nonexistent directories to PATH is harmless, and we clearly do not
++	# wish to override ONBLD_TOOLS.
+ 	#
+ 	# If we're building an ON workspace, then the prepended PATH
+ 	# elements should supercede the preexisting ONBLD_TOOLS paths,
+@@ -510,22 +509,8 @@ function use_tools {
+ 	# ${TOOLSROOT}/opt/onbld.
+ 	#
+ 
+-	STABS=${TOOLSROOT}/opt/onbld/bin/${MACH}/stabs
+-	export STABS
+-	CTFSTABS=${TOOLSROOT}/opt/onbld/bin/${MACH}/ctfstabs
+-	export CTFSTABS
+-	GENOFFSETS=${TOOLSROOT}/opt/onbld/bin/genoffsets
+-	export GENOFFSETS
+-
+-	CTFCONVERT=${TOOLSROOT}/opt/onbld/bin/${MACH}/ctfconvert
+-	export CTFCONVERT
+-	CTFMERGE=${TOOLSROOT}/opt/onbld/bin/${MACH}/ctfmerge
+-	export CTFMERGE
+-
+ 	if [ "$VERIFY_ELFSIGN" = "y" ]; then
+ 		ELFSIGN=${TOOLSROOT}/opt/onbld/bin/elfsigncmp
+-	else
+-		ELFSIGN=${TOOLSROOT}/opt/onbld/bin/${MACH}/elfsign
+ 	fi
+ 	export ELFSIGN
+ 
+@@ -539,11 +524,7 @@ function use_tools {
+ 	fi
+ 
+ 	echo "\n==== New environment settings. ====\n" >> $LOGFILE
+-	echo "STABS=${STABS}" >> $LOGFILE
+-	echo "CTFSTABS=${CTFSTABS}" >> $LOGFILE
+-	echo "CTFCONVERT=${CTFCONVERT}" >> $LOGFILE
+-	echo "CTFMERGE=${CTFMERGE}" >> $LOGFILE
+-	echo "ELFSIGN=${ELFSIGN}" >> $LOGFILE
++	[ -n "$ELFSIGN" ] && echo "ELFSIGN=${ELFSIGN}" >> $LOGFILE
+ 	echo "PATH=${PATH}" >> $LOGFILE
+ 	echo "ONBLD_TOOLS=${ONBLD_TOOLS}" >> $LOGFILE
+ }
+diff --git a/usr/src/tools/scripts/xref.mk b/usr/src/tools/scripts/xref.mk
+index a8b07d5..4e48e8b 100644
+--- a/usr/src/tools/scripts/xref.mk
++++ b/usr/src/tools/scripts/xref.mk
+@@ -58,7 +58,7 @@ include $(SRC)/Makefile.master
+ # either in the environment or in XRMAKEFILE.  To use regular cscope, set
+ # CSCOPE to cscope and CSFLAGS to -b.
+ #
+-CSCOPE	= $(BUILD_TOOLS)/onbld/bin/$(MACH)/cscope-fast
++CSCOPE	= $(BUILD_TOOLS)/onbld/bin/$(NATIVE_MACH)/cscope-fast
+ CSFLAGS	= -bq
+ CTAGS	= /usr/bin/ctags
+ CTFLAGS	= -wt
+diff --git a/usr/src/uts/Makefile b/usr/src/uts/Makefile
+index dbd7eeb..b341d0e 100644
+--- a/usr/src/uts/Makefile
++++ b/usr/src/uts/Makefile
+@@ -21,6 +21,7 @@
+ #
+ # Copyright (c) 1989, 2010, Oracle and/or its affiliates. All rights reserved.
+ # Copyright 2012 Nexenta Systems, Inc. All rights reserved.
++# Copyright (c) 2013, Joyent, Inc.  All rigts reserved.
+ #
+ # include global definitions
+ include ../Makefile.master
+@@ -28,16 +29,19 @@ include ../Makefile.master
+ #
+ # List of architectures to build as part of the standard build.
+ #
+-# Some of these architectures are built in parallel (see i386_PARALLEL and
+-# sparc_PARALLEL). This requires building some parts first before parallel build
+-# can start. Platform make files know what should be built as a prerequisite for
+-# the parallel build to work. The i386_PREREQ and sparc_PREREQ variables tell
+-# which platform directory to enter to start making prerequisite dependencies.
++# Some of these architectures are built in parallel (see *_PARALLEL). This
++# requires building some parts first before parallel build can start. Platform
++# make files know what should be built as a prerequisite for the parallel
++# build to work. The *_PREREQ variables tell which platform directory to enter
++# to start making prerequisite dependencies.
+ #
+ sparc_ARCHITECTURES = sun4v sun4u sparc
+ 
+ i386_ARCHITECTURES = i86pc i86xpv intel
+ 
++#arm_ARCHITECTURES = armv8 armv7 arm
++arm_ARCHITECTURES = armv7 arm
++
+ #
+ # For i386 all architectures can be compiled in parallel.
+ #
+@@ -56,6 +60,12 @@ sparc_PREREQ = sun4
+ sparc_PARALLEL = $(sparc_ARCHITECTURES)
+ 
+ #
++# For ARM all architectures can be compiled in parallel.
++#
++arm_PREREQ = arm
++arm_PARALLEL = $(arm_ARCHITECTURES)
++
++#
+ # Platforms defined in $(MACH)_PARALLEL are built in parallel. DUMMY is placed
+ # at the end in case $(MACH)_PARALLEL is empty to prevent everything going in
+ # parallel.
+@@ -176,6 +186,7 @@ DYNHDRDIRS =	common/avs \
+ 
+ sparc_HDRDIRS= sun/sys
+ i386_HDRDIRS= i86pc/vm i86xpv/vm
++arm_HDRDIRS= armv7/sys
+ 
+ HDRDIRS= $(COMMON_HDRDIRS) $($(MACH)_HDRDIRS)
+ install_h check: $(HDRDIRS) $($(MACH)_ARCHITECTURES)
+@@ -212,8 +223,8 @@ clean.lint modlist: $($(MACH)_ARCHITECTURES)
+ # the user will be interested in), it's historically been set to
+ # mirror the $(XRDIRS) list, and that works kinda sorta okay.
+ #
+-XRDIRS = $(sparc_ARCHITECTURES) $(i386_ARCHITECTURES) sun4 sfmmu	\
+-	sun common
++XRDIRS = $(sparc_ARCHITECTURES) $(i386_ARCHITECTURES) $(arm_ARCHITECTURES) \
++	sun4 sfmmu sun common
+ 
+ XRINCDIRS = $(XRDIRS)
+ 
+diff --git a/usr/src/uts/Makefile.uts b/usr/src/uts/Makefile.uts
+index 1ded6f2..c64500f 100644
+--- a/usr/src/uts/Makefile.uts
++++ b/usr/src/uts/Makefile.uts
+@@ -25,6 +25,7 @@
+ # Copyright (c) 2011 by Delphix. All rights reserved.
+ # Copyright (c) 2013 Andrew Stormont.  All rights reserved.
+ # Copyright 2016 Hans Rosenfeld <rosenfeld@grumpf.hope-2000.org>
++# Copyright (c) 2017, Joyent, Inc.  All rights reserved.
+ #
+ 
+ #
+@@ -114,6 +115,10 @@ CC_i386_32	= $(i386_CC)
+ CC_i386_64	= $(amd64_CC)
+ CC_amd64_64	= $(amd64_CC)
+ 
++CC_arm_32	= $(arm_CC)
++CC_arm_64	= $(aarch64_CC)
++CC_aarch64_64	= $(aarch64_CC)
++
+ CC		= $(CC_$(MACH)_$(CLASS))
+ 
+ AS_sparc_32	= $(sparc_AS)
+@@ -123,6 +128,10 @@ AS_i386_32	= $(i386_AS)
+ AS_i386_64	= $(amd64_AS)
+ AS_amd64_64	= $(amd64_AS)
+ 
++AS_arm_32	= $(arm_AS)
++AS_arm_64	= $(aarch64_AS)
++AS_aarch64_64	= $(aarch64_AS)
++
+ AS		= $(AS_$(MACH)_$(CLASS))
+ 
+ LD_sparc_32	= $(sparc_LD)
+@@ -132,6 +141,10 @@ LD_i386_32	= $(i386_LD)
+ LD_i386_64	= $(amd64_LD)
+ LD_amd64_64	= $(amd64_LD)
+ 
++LD_arm_32	= $(arm_LD)
++LD_arm_64	= $(aarch64_LD)
++LD_aarch64_64	= $(aarch64_LD)
++
+ LD		= $(LD_$(MACH)_$(CLASS))
+ 
+ LINT_sparc_32	= $(sparc_LINT)
+@@ -322,6 +335,7 @@ INS.conffile= \
+ #
+ CTFMERGE_GUDIR_sparc	= sun4u
+ CTFMERGE_GUDIR_i386	= intel
++CTFMERGE_GUDIR_arm	= arm
+ CTFMERGE_GUDIR		= $(CTFMERGE_GUDIR_$(MACH))
+ 
+ CTFMERGE_GENUNIX 	= \
+diff --git a/usr/src/uts/common/conf/param.c b/usr/src/uts/common/conf/param.c
+index 64227a3..d4a7e93 100644
+--- a/usr/src/uts/common/conf/param.c
++++ b/usr/src/uts/common/conf/param.c
+@@ -546,6 +546,17 @@ char architecture[] = "amd64";
+ char architecture_32[] = "i386";
+ char hw_provider[SYS_NMLN] = "";
+ 
++
++#elif defined(__arm__)
++
++/*
++ * On x86 machines, read hw_serial, hw_provider and srpc_domain from
++ * /etc/bootrc at boot time.
++ */
++char architecture[] = "arm";
++char architecture_32[] = "arm";
++char hw_provider[SYS_NMLN] = "";
++
+ #else
+ #error "unknown processor architecture"
+ #endif
+diff --git a/usr/src/uts/common/krtld/bootrd.c b/usr/src/uts/common/krtld/bootrd.c
+index 35ad67d..98c9f62 100644
+--- a/usr/src/uts/common/krtld/bootrd.c
++++ b/usr/src/uts/common/krtld/bootrd.c
+@@ -171,7 +171,7 @@ kobj_boot_mountroot()
+ 		    "failed to get ramdisk from boot\n");
+ 		return (-1);
+ 	}
+-#ifdef KOBJ_DEBUG
++#ifdef DEBUG
+ 	_kobj_printf(ops,
+ 	    "ramdisk range: 0x%llx-%llx\n", rd_start, rd_end);
+ #endif
+diff --git a/usr/src/uts/common/krtld/kobj.c b/usr/src/uts/common/krtld/kobj.c
+index 90303d4..1ebc27f 100644
+--- a/usr/src/uts/common/krtld/kobj.c
++++ b/usr/src/uts/common/krtld/kobj.c
+@@ -25,6 +25,7 @@
+ /*
+  * Copyright 2011 Bayard G. Bell <buffer.g.overflow@gmail.com>.
+  * All rights reserved. Use is subject to license terms.
++ * Copyright (c) 2014, Joyent, Inc.  All rights reserved.
+  */
+ 
+ /*
+@@ -277,6 +278,12 @@ static caddr_t _etext;
+ static caddr_t _data;
+ 
+ /*
++ * Optional address that describes the last valid address we're allowed to touch
++ * during the kernel's relocations.
++ */
++static caddr_t _elimit;
++
++/*
+  * The sparc linker doesn't create a memory location
+  * for a variable named _edata, so _edata can only be
+  * referred to, not modified.  krtld needs a static
+@@ -415,7 +422,10 @@ kobj_init(
+ #else
+ 	{
+ 		/* on x86, we always boot with a ramdisk */
+-		(void) kobj_boot_mountroot();
++		if (kobj_boot_mountroot() != 0) {
++			_kobj_printf(ops, "can't mount boot fs\n");
++			goto fail;
++		}
+ 
+ 		/*
+ 		 * Now that the ramdisk is mounted, finish boot property
+@@ -561,7 +571,7 @@ fail:
+ 	_kobj_printf(ops, "in the boot archive. Please verify that this"
+ 	    " file\n");
+ 	_kobj_printf(ops, "matches what is found in the boot archive.\n");
+-	_kobj_printf(ops, "You may need to boot using the Solaris failsafe to"
++	_kobj_printf(ops, "You may need to boot using the illumos failsafe to"
+ 	    " fix this.\n");
+ 	bop_panic("Unable to boot");
+ #endif
+@@ -687,6 +697,21 @@ attr_val(val_t *bootaux)
+ 		}
+ 	}
+ 
++	if (bootaux[BA_STEXT].ba_ptr != NULL)
++		_text = bootaux[BA_STEXT].ba_ptr;
++
++	if (bootaux[BA_ETEXT].ba_ptr != NULL)
++		_etext = bootaux[BA_ETEXT].ba_ptr;
++
++	if (bootaux[BA_SDATA].ba_ptr != NULL)
++		_data = bootaux[BA_SDATA].ba_ptr;
++
++	if (bootaux[BA_EDATA].ba_ptr != NULL)
++		_edata = bootaux[BA_EDATA].ba_ptr;
++
++	if (bootaux[BA_ELIMIT].ba_ptr != NULL)
++		_elimit = bootaux[BA_ELIMIT].ba_ptr;
++
+ 	/* To do the kobj_alloc, _edata needs to be set. */
+ 	for (i = 0; i < NLIBMACROS; i++) {
+ 		if (bootaux[libmacros[i].lmi_ba_index].ba_ptr != NULL) {
+@@ -2308,10 +2333,11 @@ get_progbits(struct module *mp, struct _buf *file)
+ 		 */
+ 		if (mp->text == NULL) {
+ 			mp->text = kobj_segbrk(&_edata, mp->text_size,
+-			    tp->align, 0);
++			    tp->align, _elimit);
+ 		}
+ 
+-		mp->data = kobj_segbrk(&_edata, mp->data_size, dp->align, 0);
++		mp->data = kobj_segbrk(&_edata, mp->data_size, dp->align,
++		    _elimit);
+ 
+ 		if (mp->text == NULL || mp->data == NULL)
+ 			goto done;
+@@ -2950,7 +2976,7 @@ do_common(struct module *mp)
+ 	if (mp->bss_size) {
+ 		if (standalone)
+ 			mp->bss = (uintptr_t)kobj_segbrk(&_edata, mp->bss_size,
+-			    MINALIGN, 0);
++			    MINALIGN, _elimit);
+ 		else
+ 			mp->bss = (uintptr_t)vmem_alloc(data_arena,
+ 			    mp->bss_size, VM_SLEEP | VM_BESTFIT);
+@@ -4047,7 +4073,7 @@ kobj_alloc(size_t size, int flag)
+ 		if (flag & (KM_TMP | KM_SCRATCH))
+ 			return (BOP_ALLOC(ops, 0, size, MINALIGN));
+ #endif
+-		return (kobj_segbrk(&_edata, size, MINALIGN, 0));
++		return (kobj_segbrk(&_edata, size, MINALIGN, _elimit));
+ 	}
+ 
+ 	kobj_stat.nalloc_calls++;
+diff --git a/usr/src/uts/common/krtld/reloc.h b/usr/src/uts/common/krtld/reloc.h
+index b7ae5a8..211cfd7 100644
+--- a/usr/src/uts/common/krtld/reloc.h
++++ b/usr/src/uts/common/krtld/reloc.h
+@@ -78,6 +78,26 @@ extern "C" {
+ #define	reloc_table		reloc32_table_sparc
+ #endif
+ 
++#elif	defined(DO_RELOC_LIBLD_AARCH64)
++
++#define	DO_RELOC_LIBLD
++#if	defined(_ELF64)
++#define	do_reloc_ld		do64_reloc_ld_aarch64
++#define	reloc_table		reloc64_table_aarch64
++#else
++#error	"XXXARM: Surely this shouldn't ever happen?"
++#endif
++
++#elif	defined(DO_RELOC_LIBLD_ARM)
++
++#define	DO_RELOC_LIBLD
++#if	defined(_ELF64)
++#error	"XXXARM: Surely this shouldn't ever happen?"
++#else
++#define	do_reloc_ld		do32_reloc_ld_arm
++#define	reloc_table		reloc32_table_arm
++#endif
++
+ #else				/* rtld */
+ 
+ #if	defined(_ELF64)
+@@ -227,6 +247,16 @@ extern const char	*conv_reloc_386_type(Word);
+ extern const char	*conv_reloc_SPARC_type(Word);
+ #define	CONV_RELOC_TYPE	conv_reloc_SPARC_type
+ 
++#elif defined(__aarch64__)
++
++extern const char	*conv_reloc_aarch64_type(Word);
++#define	CONV_RELOC_TYPE	conv_reloc_aarch64_type
++
++#elif defined(__arm__)
++
++extern const char	*conv_reloc_ARM_type(Word);
++#define	CONV_RELOC_TYPE	conv_reloc_ARM_type
++
+ #else
+ #error platform not defined!
+ #endif
+diff --git a/usr/src/uts/common/os/brand.c b/usr/src/uts/common/os/brand.c
+index 0af67f5..b1cefae 100644
+--- a/usr/src/uts/common/os/brand.c
++++ b/usr/src/uts/common/os/brand.c
+@@ -43,10 +43,16 @@ static void brand_plat_interposition_disable(void);
+ struct brand_mach_ops native_mach_ops  = {
+ 		NULL, NULL
+ };
+-#else /* !__sparcv9 */
++#elif defined(__i386) || defined(__amd64)
+ struct brand_mach_ops native_mach_ops  = {
+ 		NULL, NULL, NULL, NULL
+ };
++#elif defined(__arm__)
++struct brand_mach_ops native_mach_ops  = {
++		NULL
++};
++#else
++#error "port me"
+ #endif /* !__sparcv9 */
+ 
+ brand_t native_brand = {
+diff --git a/usr/src/uts/common/os/cpu_event.c b/usr/src/uts/common/os/cpu_event.c
+index 0bd8c79..e25a67a 100644
+--- a/usr/src/uts/common/os/cpu_event.c
++++ b/usr/src/uts/common/os/cpu_event.c
+@@ -22,6 +22,9 @@
+  * Copyright (c) 2009-2010, Intel Corporation.
+  * All rights reserved.
+  */
++/*
++ * Copyright (c) 2013, Joyent, Inc.  All rights reserved.
++ */
+ 
+ /*
+  * Introduction
+@@ -59,8 +62,10 @@
+ #include <sys/sunddi.h>
+ #if defined(__sparc)
+ #include <sys/machsystm.h>
+-#elif defined(__x86)
++#elif defined(__x86) || defined(__arm__)
+ #include <sys/archsystm.h>
++#else
++#error "port me"
+ #endif
+ #include <sys/cpu_event.h>
+ 
+@@ -78,6 +83,11 @@
+ #define	IDLE_STATE_NORMAL	0
+ #endif
+ #define	CPU_IDLE_STATE_NORMAL	IDLE_STATE_NORMAL
++#elif defined(__arm__)
++/* XXXARM Uh, really? */
++#define	CPU_IDLE_STATE_NORMAL	0
++#else
++#error "port me"
+ #endif
+ 
+ /*
+diff --git a/usr/src/uts/common/os/ddifm.c b/usr/src/uts/common/os/ddifm.c
+index 533fa15..5b2d0a0 100644
+--- a/usr/src/uts/common/os/ddifm.c
++++ b/usr/src/uts/common/os/ddifm.c
+@@ -351,7 +351,20 @@ fm_dev_ereport_postv(dev_info_t *dip, dev_info_t *eqdip,
+ 	char			class[ERPT_CLASS_SZ];
+ 	char			path[MAXPATHLEN];
+ 
++	/*
++	 * The ARM AAPCS defines a va_list as:
++	 *
++	 * typedef struct __va_list { void *__ap; } va_list;
++	 *
++	 * Therefore we cannot do this comparison the way that we do on other
++	 * platforms. We should probably factor this out into a general
++	 * macro/check.
++	 */
++#if defined(__arm__)
++	ASSERT(ap.__ap != NULL);
++#elif !defined(__aarch64__)
+ 	ASSERT(ap != NULL);	/* must supply at least ereport version */
++#endif
+ 	ASSERT(dip && eqdip && error_class);
+ 
+ 	/*
+diff --git a/usr/src/uts/common/os/lgrp.c b/usr/src/uts/common/os/lgrp.c
+index 4fa73dd..6b65f4e 100644
+--- a/usr/src/uts/common/os/lgrp.c
++++ b/usr/src/uts/common/os/lgrp.c
+@@ -1440,8 +1440,8 @@ lgrp_mem_fini(int mnode, lgrp_handle_t hand, boolean_t is_copy_rename)
+ 		 * Remove memory node from lgroup.
+ 		 */
+ 		lgrp->lgrp_mnodes &= ~mnodes_mask;
++		ASSERT(lgrp->lgrp_nmnodes > 0);
+ 		lgrp->lgrp_nmnodes--;
+-		ASSERT(lgrp->lgrp_nmnodes >= 0);
+ 	}
+ 	ASSERT(lgrp_root->lgrp_nmnodes > 0);
+ 
+diff --git a/usr/src/uts/common/os/mmapobj.c b/usr/src/uts/common/os/mmapobj.c
+index 142c107..e26f1f8 100644
+--- a/usr/src/uts/common/os/mmapobj.c
++++ b/usr/src/uts/common/os/mmapobj.c
+@@ -200,13 +200,13 @@ struct mobj_stats {
+ #endif
+ 
+ /*
+- * Check if addr is at or above the address space reserved for the stack.
+- * The stack is at the top of the address space for all sparc processes
+- * and 64 bit x86 processes.  For 32 bit x86, the stack is not at the top
+- * of the address space and thus this check wil always return false for
+- * 32 bit x86 processes.
++ * Check if addr is at or above the address space reserved for the stack.  The
++ * stack is at the top of the address space for all sparc processes, arm
++ * processes, and 64 bit x86 processes.  For 32 bit x86, the stack is not at the
++ * top of the address space and thus this check wil always return false for 32
++ * bit x86 processes.
+  */
+-#if defined(__sparc)
++#if defined(__sparc) || defined(__arm__)
+ #define	OVERLAPS_STACK(addr, p)						\
+ 	(addr >= (p->p_usrstack - ((p->p_stk_ctl + PAGEOFFSET) & PAGEMASK)))
+ #elif defined(__amd64)
+@@ -1010,7 +1010,7 @@ mmapobj_map_flat(vnode_t *vp, mmapobj_result_t *mrp, size_t padding,
+  * fcred - credentials for the file associated with vp at open time.
+  */
+ static int
+-mmapobj_map_ptload(struct vnode *vp, caddr_t addr, size_t len, size_t zfodlen,
++mmapobj_map_ptload(struct vnode *vp, caddr_t addr, size_t len, volatile size_t zfodlen,
+     off_t offset, int prot, cred_t *fcred)
+ {
+ 	int error = 0;
+diff --git a/usr/src/uts/common/os/panic.c b/usr/src/uts/common/os/panic.c
+index 09dc058..10c85e4 100644
+--- a/usr/src/uts/common/os/panic.c
++++ b/usr/src/uts/common/os/panic.c
+@@ -212,8 +212,8 @@ panicsys(const char *format, va_list alist, struct regs *rp, int on_panic_stack)
+ 	kthread_t *t = curthread;
+ 	cpu_t *cp = CPU;
+ 
+-	caddr_t intr_stack = NULL;
+-	uint_t intr_actv;
++	volatile caddr_t intr_stack = NULL;
++	volatile uint_t intr_actv;
+ 
+ 	ushort_t schedflag = t->t_schedflag;
+ 	cpu_t *bound_cpu = t->t_bound_cpu;
+diff --git a/usr/src/uts/common/sys/Makefile b/usr/src/uts/common/sys/Makefile
+index 78cee80..0b6230e 100644
+--- a/usr/src/uts/common/sys/Makefile
++++ b/usr/src/uts/common/sys/Makefile
+@@ -212,6 +212,8 @@ CHKHDRS=			\
+ 	efi_partition.h		\
+ 	elf.h			\
+ 	elf_386.h		\
++	elf_aarch64.h		\
++	elf_ARM.h		\
+ 	elf_SPARC.h		\
+ 	elf_notes.h		\
+ 	elf_amd64.h		\
+diff --git a/usr/src/uts/common/sys/Makefile.syshdrs b/usr/src/uts/common/sys/Makefile.syshdrs
+index 3d9bc82..302d547 100644
+--- a/usr/src/uts/common/sys/Makefile.syshdrs
++++ b/usr/src/uts/common/sys/Makefile.syshdrs
+@@ -171,11 +171,9 @@ ROOTDIR=	$(ROOT)/usr/include/sys
+ 
+ ROOTDKTPDIR=	$(ROOTDIR)/dktp
+ 
+-sparc_ROOTDIRS=	$(ROOTDKTPDIR) $(ROOTDIR)/scsi/adapters \
+-		$(ROOTDIR)/scsi/targets
++sparc_ROOTDIRS=	$(ROOTDKTPDIR)
+ 
+-i386_ROOTDIRS=	$(ROOTDKTPDIR) $(ROOTDIR)/scsi/adapters $(ROOTDIR)/scsi/targets \
+-		$(ROOTDIR)/agp $(ROOTDIR)/sata
++i386_ROOTDIRS=	$(ROOTDKTPDIR) $(ROOTDIR)/agp $(ROOTDIR)/sata
+ 
+ ROOTDIRS=			\
+ 	$(ROOTDIR)		\
+@@ -214,9 +212,11 @@ ROOTDIRS=			\
+ 	$(ROOTDIR)/idm		\
+ 	$(ROOTDIR)/iscsit	\
+ 	$(ROOTDIR)/scsi		\
++	$(ROOTDIR)/scsi/adapters\
+ 	$(ROOTDIR)/scsi/conf	\
+ 	$(ROOTDIR)/scsi/generic	\
+ 	$(ROOTDIR)/scsi/impl	\
++	$(ROOTDIR)/scsi/targets	\
+ 	$(ROOTDIR)/sdcard	\
+ 	$(ROOTDIR)/sysevent     \
+ 	$(ROOTDIR)/contract     \
+diff --git a/usr/src/uts/common/sys/cpc_impl.h b/usr/src/uts/common/sys/cpc_impl.h
+index bc89006..1e320ce 100644
+--- a/usr/src/uts/common/sys/cpc_impl.h
++++ b/usr/src/uts/common/sys/cpc_impl.h
+@@ -204,9 +204,17 @@ enum dcpc_mask_attr {
+ #ifdef __sparc
+ extern uint64_t ultra_gettick(void);
+ #define	KCPC_GET_TICK ultra_gettick
+-#else
++#elif __x86
+ extern hrtime_t tsc_read(void);
+ #define	KCPC_GET_TICK tsc_read
++#elif __arm__
++extern hrtime_t arm_gettick(void);
++#define	KCPC_GET_TICK arm_gettick
++#elif __aarch64__
++extern hrtime_t aarch64_gettick(void);
++#define	KCPC_GET_TICK aarch64_gettick
++#else
++#error "port me"
+ #endif /* __sparc */
+ 
+ #define	PCBE_NAMELEN 30 /* Enough room for "pcbe." plus full PCBE name spec */
+diff --git a/usr/src/uts/common/sys/ddi_impldefs.h b/usr/src/uts/common/sys/ddi_impldefs.h
+index bfe2d85..1940eec 100644
+--- a/usr/src/uts/common/sys/ddi_impldefs.h
++++ b/usr/src/uts/common/sys/ddi_impldefs.h
+@@ -908,6 +908,33 @@ typedef struct ddi_dma_impl {
+ 	ndi_err_t	dmai_error;
+ } ddi_dma_impl_t;
+ 
++#elif defined(__arm__) || defined(__aarch64__)
++
++/*
++ * XXXARM: This is a stuf for future use based on x86
++ */
++typedef struct ddi_dma_impl {
++	ddi_dma_cookie_t *dmai_cookie; /* array of DMA cookies */
++	void		*dmai_private;
++
++	/*
++	 * Information gathered from the original dma mapping
++	 * request and saved for the lifetime of the mapping.
++	 */
++	uint_t		dmai_minxfer;
++	uint_t		dmai_burstsizes;
++	uint_t		dmai_rflags;	/* requester's flags + ours */
++	int		dmai_nwin;
++	dev_info_t	*dmai_rdip;	/* original requester's dev_info_t */
++
++	ddi_dma_attr_t	dmai_attr;	/* DMA attributes */
++
++	int		(*dmai_fault_check)(struct ddi_dma_impl *handle);
++	void		(*dmai_fault_notify)(struct ddi_dma_impl *handle);
++	int		dmai_fault;
++	ndi_err_t	dmai_error;
++} ddi_dma_impl_t;
++
+ #else
+ #error "struct ddi_dma_impl not defined for this architecture"
+ #endif  /* defined(__sparc) */
+diff --git a/usr/src/uts/common/sys/ddidmareq.h b/usr/src/uts/common/sys/ddidmareq.h
+index ec6ca3b..13fe48a 100644
+--- a/usr/src/uts/common/sys/ddidmareq.h
++++ b/usr/src/uts/common/sys/ddidmareq.h
+@@ -383,6 +383,159 @@ typedef struct ddi_dma_lim {
+ 
+ } ddi_dma_lim_t;
+ 
++#elif defined(__arm__) || defined(__aarch64__)
++/*
++ * XXXARM: We're starting with the intel version here. This may or may not be
++ * sufficient and we'll need to change this. Don't be afraid.
++ */
++typedef struct ddi_dma_lim {
++
++	/*
++	 * Low range of 32 bit addressing capability.
++	 */
++	uint_t	dlim_addr_lo;
++
++	/*
++	 * Upper Inclusive bound of 32 bit addressing capability.
++	 *
++	 * The ISA nexus restricts this to 0x00ffffff, since this bus has
++	 * only 24 address lines.  This enforces the 16 Mb address limitation.
++	 * The EISA nexus restricts this to 0xffffffff.
++	 */
++	uint_t	dlim_addr_hi;
++
++	/*
++	 * DMA engine counter not used; set to 0
++	 */
++	uint_t	dlim_cntr_max;
++
++	/*
++	 *  DMA burst sizes not used; set to 1
++	 */
++	uint_t	dlim_burstsizes;
++
++	/*
++	 * Minimum effective DMA transfer size.
++	 *
++	 * This value specifies the minimum effective granularity of the
++	 * DMA engine. It is distinct from dlim_burstsizes in that it
++	 * describes the minimum amount of access a DMA transfer will
++	 * effect. dlim_burstsizes describes in what electrical fashion
++	 * the DMA engine might perform its accesses, while dlim_minxfer
++	 * describes the minimum amount of memory that can be touched by
++	 * the DMA transfer.
++	 *
++	 * This value also implies the required address alignment.
++	 * The number of bytes transferred is assumed to be
++	 * 	dlim_minxfer * (DMA engine count)
++	 *
++	 * It should be set to DMA_UNIT_8, DMA_UNIT_16, or DMA_UNIT_32.
++	 */
++	uint_t	dlim_minxfer;
++
++	/*
++	 * Expected average data rate for this DMA engine
++	 * while transferring data.
++	 *
++	 * This is used as a hint for a number of operations that might
++	 * want to know the possible optimal latency requirements of this
++	 * device. A value of zero will be interpreted as a 'do not care'.
++	 */
++	uint_t	dlim_dmaspeed;
++
++
++	/*
++	 * Version number of this structure
++	 */
++	uint_t	dlim_version;	/* = 0x86 << 24 + 0 */
++
++	/*
++	 * Inclusive upper bound with which the DMA engine's Address acts as
++	 * a register.
++	 * This handles the case where an upper portion of a DMA address
++	 * register is a latch instead of being a full 32 bit register
++	 * (e.g., the upper 16 bits remain constant while the lower 16 bits
++	 * are incremented for each DMA transfer).
++	 *
++	 * The ISA nexus restricts only 3rd-party DMA requests to 0x0000ffff,
++	 * since the ISA DMA engine has a 16-bit register for low address and
++	 * an 8-bit latch for high address.  This enforces the first 64 Kb
++	 * limitation (address boundary).
++	 * The EISA nexus restricts only 3rd-party DMA requests to 0xffffffff.
++	 */
++	uint_t	dlim_adreg_max;
++
++	/*
++	 * Maximum transfer count that the DMA engine can handle.
++	 *
++	 * The ISA nexus restricts only 3rd-party DMA requests to 0x0000ffff,
++	 * since the ISA DMA engine has a 16-bit register for counting.
++	 * This enforces the other 64 Kb limitation (count size).
++	 * The EISA nexus restricts only 3rd-party DMA requests to 0x00ffffff,
++	 * since the EISA DMA engine has a 24-bit register for counting.
++	 *
++	 * This transfer count limitation is a per segment limitation.
++	 * It can also be used to restrict the size of segments.
++	 *
++	 * This is used as a bit mask, so it must be a power of 2, minus 1.
++	 */
++	uint_t	dlim_ctreg_max;
++
++	/*
++	 * Granularity of DMA transfer, in units of bytes.
++	 *
++	 * Breakup sizes must be multiples of this value.
++	 * If no scatter/gather capabilty is specified, then the size of
++	 * each DMA transfer must be a multiple of this value.
++	 *
++	 * If there is scatter/gather capability, then a single cookie cannot
++	 * be smaller in size than the minimum xfer value, and may be less
++	 * than the granularity value.  The total transfer length of the
++	 * scatter/gather list should be a multiple of the granularity value;
++	 * use dlim_sgllen to specify the length of the scatter/gather list.
++	 *
++	 * This value should be equal to the sector size of the device.
++	 */
++	uint_t	dlim_granular;
++
++	/*
++	 * Length of scatter/gather list
++	 *
++	 * This value specifies the number of segments or cookies that a DMA
++	 * engine can consume in one i/o request to the device.  For 3rd-party
++	 * DMA that uses the bus nexus this should be set to 1.  Devices with
++	 * 1st-party DMA capability should specify the number of entries in
++	 * its scatter/gather list.  The breakup routine will ensure that each
++	 * group of dlim_sgllen cookies (within a DMA window) will have a
++	 * total transfer length that is a multiple of dlim_granular.
++	 *
++	 *	< 0  :  tbd
++	 *	= 0  :  breakup is for PIO.
++	 *	= 1  :  breakup is for DMA engine with no scatter/gather
++	 *		capability.
++	 *	>= 2 :  breakup is for DMA engine with scatter/gather
++	 *		capability; value is max number of entries in list.
++	 *
++	 * Note that this list length is not dependent on the DMA window
++	 * size.  The size of the DMA window is based on resources consumed,
++	 * such as intermediate buffers.  Several s/g lists may exist within
++	 * a window.  But the end of a window does imply the end of the s/g
++	 * list.
++	 */
++	short	dlim_sgllen;
++
++	/*
++	 * Size of device i/o request
++	 *
++	 * This value indicates the maximum number of bytes the device
++	 * can transmit/receive for one i/o command.  This limitation is
++	 * significant ony if it is less than (dlim_ctreg_max * dlim_sgllen).
++	 */
++	uint_t	dlim_reqsize;
++
++
++} ddi_dma_lim_t;
++
+ #else
+ #error "struct ddi_dma_lim not defined for this architecture"
+ #endif	/* defined(__sparc) */
+diff --git a/usr/src/uts/common/sys/elf.h b/usr/src/uts/common/sys/elf.h
+index e6915ac..45d0261 100644
+--- a/usr/src/uts/common/sys/elf.h
++++ b/usr/src/uts/common/sys/elf.h
+@@ -257,7 +257,8 @@ typedef struct {
+ #define	EM_OPENRISC	92		/* OpenRISC 32-bit embedded processor */
+ #define	EM_ARC_A5	93		/* ARC Cores Tangent-A5 */
+ #define	EM_XTENSA	94		/* Tensilica Xtensa architecture */
+-#define	EM_NUM		95
++#define	EM_AARCH64	183		/* ARM aarch64 architecture */
++#define	EM_NUM		184
+ 
+ #define	EV_NONE		0		/* e_version, EI_VERSION */
+ #define	EV_CURRENT	1
+@@ -848,4 +849,12 @@ int	elfheadcheck(unsigned char, Elf32_Half, Elf32_Word);
+ #include <sys/elf_amd64.h>
+ #endif
+ 
++#if defined(ELF_TARGET_ALL) || defined(ELF_TARGET_AARCH64)
++#include <sys/elf_aarch64.h>
++#endif
++
++#if defined(ELF_TARGET_ALL) || defined(ELF_TARGET_ARM)
++#include <sys/elf_ARM.h>
++#endif
++
+ #endif	/* _SYS_ELF_H */
+diff --git a/usr/src/uts/common/sys/fs/hsfs_spec.h b/usr/src/uts/common/sys/fs/hsfs_spec.h
+index 4618019..76b9703 100644
+--- a/usr/src/uts/common/sys/fs/hsfs_spec.h
++++ b/usr/src/uts/common/sys/fs/hsfs_spec.h
+@@ -26,8 +26,6 @@
+ #ifndef	_SYS_FS_HSFS_SPEC_H
+ #define	_SYS_FS_HSFS_SPEC_H
+ 
+-#pragma ident	"%Z%%M%	%I%	%E% SMI"
+-
+ /*
+  * High Sierra filesystem specification
+  */
+@@ -61,7 +59,7 @@ extern void	hs_parse_longdate(uchar_t *, struct timeval *);
+ #define	MSB_SHORT(x)	((ZERO(x) << 8) | ONE(x))
+ #define	LSB_SHORT(x)	((ONE(x) << 8) | ZERO(x))
+ 
+-#if defined(__i386) || defined(__amd64)
++#if defined(__i386) || defined(__amd64) || defined(__arm__)
+ #define	BOTH_SHORT(x)	(short)*((short *)x)
+ #define	BOTH_INT(x)	(int)*((int *)x)
+ #elif defined(__sparc)
+diff --git a/usr/src/uts/common/sys/isa_defs.h b/usr/src/uts/common/sys/isa_defs.h
+index 5c32591..fbd9986 100644
+--- a/usr/src/uts/common/sys/isa_defs.h
++++ b/usr/src/uts/common/sys/isa_defs.h
+@@ -25,6 +25,9 @@
+  * Use is subject to license terms.
+  * Copyright 2016 Joyent, Inc.
+  */
++/*
++ * Copyright (c) 2013, Joyent, Inc.  All rights reserved.
++ */
+ 
+ #ifndef	_SYS_ISA_DEFS_H
+ #define	_SYS_ISA_DEFS_H
+@@ -481,6 +484,99 @@ extern "C" {
+ #error	"unknown SPARC version"
+ #endif
+ 
++#elif defined(__arm__)
++
++#define	_LITTLE_ENDIAN
++#define	_STACK_GROWS_DOWNWARD
++#define	_LONG_LONG_LTOH
++#define	_BIT_FIELDS_LTOH
++#define	_IEEE_754
++
++/*
++ * These are all taken from the Procedure Call Architecture for the ARM
++ * Architecture. Note that the complex entities are defined to be structures of
++ * two values. As such, that makes them an aggregate and the alignment of an
++ * aggregate is the alignment of most-aligned member.
++ */
++#define	_CHAR_IS_UNSIGNED
++#define	_BOOL_ALIGNMENT				1
++#define	_CHAR_ALIGNMENT				1
++#define	_SHORT_ALIGNMENT			2
++#define	_INT_ALIGNMENT				4
++#define	_FLOAT_ALIGNMENT			4
++#define	_FLOAT_COMPLEX_ALIGNMENT		4
++#define	_LONG_ALIGNMENT				4
++#define	_LONG_LONG_ALIGNMENT			8
++#define	_DOUBLE_ALIGNMENT			8
++#define	_DOUBLE_COMPLEX_ALIGNMENT		8
++#define	_LONG_DOUBLE_ALIGNMENT			8
++#define	_LONG_DOUBLE_COMPLEX_ALIGNMENT		8
++#define	_POINTER_ALIGNMENT			4
++#define	_MAX_ALIGNMENT				8
++#define	_ALIGNMENT_REQUIRED			1
++
++#define	_LONG_LONG_ALIGNMENT_32			_LONG_LONG_ALIGNMENT
++
++/*
++ * Define the appropriate "implementation choices"
++ */
++#define	_ILP32
++#if !defined(_I32LPx) && defined(_KERNEL)
++#define	_I32LPx
++#endif
++#define	_SUNOS_VTOC_16
++#define	_DMA_USES_PHYSADDR
++#define	_FIRMWARE_NEEDS_FDISK
++#define	_DONT_USE_1275_GENERIC_NAMES
++#define	_RTC_CONFIG
++#define	_SOFT_HOSTID
++
++#elif defined(__aarch64__)
++
++/* XXX: stolen from __arm__ section above */
++
++#define	_LITTLE_ENDIAN
++#define	_STACK_GROWS_DOWNWARD
++#define	_LONG_LONG_LTOH
++#define	_BIT_FIELDS_LTOH
++#define	_IEEE_754
++
++/*
++ * These are all taken from the Procedure Call Architecture for the ARM
++ * Architecture. Note that the complex entities are defined to be structures of
++ * two values. As such, that makes them an aggregate and the alignment of an
++ * aggregate is the alignment of most-aligned member.
++ */
++#define	_CHAR_IS_UNSIGNED
++#define	_BOOL_ALIGNMENT				1
++#define	_CHAR_ALIGNMENT				1
++#define	_SHORT_ALIGNMENT			2
++#define	_INT_ALIGNMENT				4
++#define	_FLOAT_ALIGNMENT			4
++#define	_FLOAT_COMPLEX_ALIGNMENT		4
++#define	_LONG_ALIGNMENT				4
++#define	_LONG_LONG_ALIGNMENT			8
++#define	_DOUBLE_ALIGNMENT			8
++#define	_DOUBLE_COMPLEX_ALIGNMENT		8
++#define	_LONG_DOUBLE_ALIGNMENT			8
++#define	_LONG_DOUBLE_COMPLEX_ALIGNMENT		8
++#define	_POINTER_ALIGNMENT			4
++#define	_MAX_ALIGNMENT				8
++#define	_ALIGNMENT_REQUIRED			1
++
++#define	_LONG_LONG_ALIGNMENT_32			_LONG_LONG_ALIGNMENT
++
++/*
++ * Define the appropriate "implementation choices"
++ */
++#define	_ILP64
++#define	_SUNOS_VTOC_16
++#define	_DMA_USES_PHYSADDR
++#define	_FIRMWARE_NEEDS_FDISK
++#define	_DONT_USE_1275_GENERIC_NAMES
++#define	_RTC_CONFIG
++#define	_SOFT_HOSTID
++
+ /*
+  * #error is strictly ansi-C, but works as well as anything for K&R systems.
+  */
+diff --git a/usr/src/uts/common/sys/kobj.h b/usr/src/uts/common/sys/kobj.h
+index 8537430..19dcd78 100644
+--- a/usr/src/uts/common/sys/kobj.h
++++ b/usr/src/uts/common/sys/kobj.h
+@@ -26,8 +26,6 @@
+ #ifndef _SYS_KOBJ_H
+ #define	_SYS_KOBJ_H
+ 
+-#pragma ident	"%Z%%M%	%I%	%E% SMI"
+-
+ #include <sys/modctl.h>
+ #include <sys/elf.h>
+ #include <sys/machelf.h>
+@@ -190,7 +188,8 @@ extern void kobj_set_ctf(struct module *, caddr_t data, size_t size);
+ 
+ extern int kobj_filbuf(struct _buf *);
+ extern void kobj_sync(void);
+-#if defined(__i386) || defined(__sparc) || defined(__amd64)
++#if defined(__i386) || defined(__sparc) || defined(__amd64) || \
++    defined(__arm__) || defined(__aarch64__)
+ extern void kobj_vmem_init(vmem_t **, vmem_t **);
+ #else
+ #error "ISA not supported"
+diff --git a/usr/src/uts/common/sys/kobj_impl.h b/usr/src/uts/common/sys/kobj_impl.h
+index 1dd7da9..9c31bfc 100644
+--- a/usr/src/uts/common/sys/kobj_impl.h
++++ b/usr/src/uts/common/sys/kobj_impl.h
+@@ -21,6 +21,7 @@
+ /*
+  * Copyright 2007 Sun Microsystems, Inc.  All rights reserved.
+  * Use is subject to license terms.
++ * Copyright (c) 2014, Joyent, Inc.  All rights reserved.
+  */
+ 
+ /*
+@@ -30,8 +31,6 @@
+ #ifndef	_SYS_KOBJ_IMPL_H
+ #define	_SYS_KOBJ_IMPL_H
+ 
+-#pragma ident	"%Z%%M%	%I%	%E% SMI"
+-
+ #include <sys/kdi.h>
+ #include <sys/kobj.h>
+ 
+@@ -59,7 +58,12 @@ extern "C" {
+ #define	BA_MMU		13
+ #define	BA_GOTADDR	14
+ #define	BA_NEXTGOT	15
+-#define	BA_NUM		16
++#define	BA_ETEXT	16
++#define	BA_EDATA	17
++#define	BA_ELIMIT	18
++#define	BA_STEXT	19
++#define	BA_SDATA	20
++#define	BA_NUM		21
+ 
+ typedef union {
+ 	unsigned long ba_val;
+diff --git a/usr/src/uts/common/sys/machelf.h b/usr/src/uts/common/sys/machelf.h
+index dea6d10..ca8b7ba 100644
+--- a/usr/src/uts/common/sys/machelf.h
++++ b/usr/src/uts/common/sys/machelf.h
+@@ -37,6 +37,10 @@ extern "C" {
+ #include <sys/elf_386.h>
+ #elif defined(__sparc)
+ #include <sys/elf_SPARC.h>
++#elif defined(__aarch64__)
++#include <sys/elf_aarch64.h>
++#elif defined(__arm)
++#include <sys/elf_ARM.h>
+ #endif
+ #ifndef	_ASM
+ #include <sys/types.h>
+diff --git a/usr/src/uts/common/sys/thread.h b/usr/src/uts/common/sys/thread.h
+index d917944..03142a8 100644
+--- a/usr/src/uts/common/sys/thread.h
++++ b/usr/src/uts/common/sys/thread.h
+@@ -143,7 +143,7 @@ typedef struct _kthread {
+ 	uint8_t	t_lockstat;	/* set while thread is in lockstat code */
+ 	uint8_t	t_pil;		/* interrupt thread PIL */
+ 	disp_lock_t	t_pi_lock;	/* lock protecting t_prioinv list */
+-	char	t_nomigrate;	/* do not migrate if set */
++	signed char	t_nomigrate;	/* do not migrate if set */
+ 	struct cpu	*t_cpu;	/* CPU that thread last ran on */
+ 	struct cpu	*t_weakbound_cpu;	/* cpu weakly bound to */
+ 	struct lgrp_ld	*t_lpl;	/* load average for home lgroup */
+diff --git a/usr/src/uts/common/sys/user.h b/usr/src/uts/common/sys/user.h
+index a7bff8d..2c25e1e 100644
+--- a/usr/src/uts/common/sys/user.h
++++ b/usr/src/uts/common/sys/user.h
+@@ -26,7 +26,7 @@
+ /*	Copyright (c) 1984, 1986, 1987, 1988, 1989 AT&T	*/
+ /*	  All Rights Reserved	*/
+ /*
+- * Copyright (c) 2012 Joyent, Inc.  All rights reserved.
++ * Copyright (c) 2013 Joyent, Inc.  All rights reserved.
+  */
+ 
+ 
+@@ -188,6 +188,10 @@ typedef struct {		/* kernel syscall set type */
+ #define	__KERN_NAUXV_IMPL 20
+ #elif defined(__i386) || defined(__amd64)
+ #define	__KERN_NAUXV_IMPL 22
++#elif defined(__arm__) || defined(__aarch64__)
++#define	__KERN_NAUXV_IMPL 20	/* XXX TOTAL GUESS */
++#else
++#error "port me"
+ #endif
+ 
+ struct execsw;
+diff --git a/usr/src/uts/common/syscall/lwp_create.c b/usr/src/uts/common/syscall/lwp_create.c
+index 53ecd8c..8aacc28 100644
+--- a/usr/src/uts/common/syscall/lwp_create.c
++++ b/usr/src/uts/common/syscall/lwp_create.c
+@@ -105,13 +105,17 @@ syslwp_create(ucontext_t *ucp, int flags, id_t *new_lwp)
+ 		sigutok(&uc32.uc_sigmask, &sigmask);
+ #if defined(__sparc)
+ 		ucontext_32ton(&uc32, &uc, NULL, NULL);
+-#else	/* __amd64 */
++#elif defined(__aarch64__)
++		ucontext_32ton(&uc32, &uc);
++#elif defined(__amd64)
+ 		ucontext_32ton(&uc32, &uc);
+ 		/*
+ 		 * libc stashed thrptr into unused kernel %sp.
+ 		 * See setup_context() in libc.
+ 		 */
+ 		thrptr = (uint32_t)uc32.uc_mcontext.gregs[ESP];
++#else
++#error "port me"
+ #endif
+ 	}
+ #endif /* _SYSCALL32_IMPL */
+diff --git a/usr/src/uts/common/vm/page.h b/usr/src/uts/common/vm/page.h
+index d129cf7..d1e003c 100644
+--- a/usr/src/uts/common/vm/page.h
++++ b/usr/src/uts/common/vm/page.h
+@@ -95,8 +95,8 @@ typedef int	selock_t;
+ #define	VM_STAT_ADD(stat)			(stat)++
+ #define	VM_STAT_COND_ADD(cond, stat)		((void) (!(cond) || (stat)++))
+ #else
+-#define	VM_STAT_ADD(stat)
+-#define	VM_STAT_COND_ADD(cond, stat)
++#define	VM_STAT_ADD(stat)			do { } while (0)
++#define	VM_STAT_COND_ADD(cond, stat)		do { } while (0)
+ #endif	/* VM_STATS */
+ 
+ #ifdef _KERNEL
+diff --git a/usr/src/uts/common/vm/page_retire.c b/usr/src/uts/common/vm/page_retire.c
+index 2bebe9a..bfbaac1 100644
+--- a/usr/src/uts/common/vm/page_retire.c
++++ b/usr/src/uts/common/vm/page_retire.c
+@@ -601,7 +601,7 @@ page_clear_transient_ue(page_t *pp)
+ 	uint64_t	pa;
+ 	uint32_t	pa_hi, pa_lo;
+ 	on_trap_data_t	otd;
+-	int		errors = 0;
++	volatile int	errors = 0;
+ 	int		i;
+ 
+ 	ASSERT(PAGE_EXCL(pp));
+diff --git a/usr/src/uts/i86pc/Makefile b/usr/src/uts/i86pc/Makefile
+index 64ac810..46278bf 100644
+--- a/usr/src/uts/i86pc/Makefile
++++ b/usr/src/uts/i86pc/Makefile
+@@ -156,7 +156,7 @@ include ../Makefile.targ
+ #
+ XRDIRS	= ../i86pc ../intel ../common
+ 
+-XRPRUNE	= sun4u sun4
++XRPRUNE	= sun4u sun4v sun4 sparc armv7 arm
+ 
+ cscope.out tags: FRC
+ 	$(XREF) -x $@
+diff --git a/usr/src/uts/i86xpv/Makefile b/usr/src/uts/i86xpv/Makefile
+index 7d3866b..ba00dbe 100644
+--- a/usr/src/uts/i86xpv/Makefile
++++ b/usr/src/uts/i86xpv/Makefile
+@@ -24,6 +24,8 @@
+ #
+ # Copyright 2013 Nexenta Systems, Inc.  All rights reserved.
+ #
++
++#
+ #	This makefile drives the production of all implementation architecture
+ #	dependent modules for the i86xpv architecture.
+ #
+@@ -153,8 +155,12 @@ include ../Makefile.targ
+ # Cross-reference customization: build a cross-reference over all of the
+ # i86pc-related directories.
+ #
+-XRDIRS	= ../i86xpv ../i86pc ../intel ../common
+-XRPRUNE	= sun4v sun4u sun4 sfmmu sparc
++SHARED_XRDIRS	= ../i86xpv ../i86pc ../intel ../common
++XRDIRS		= $(SHARED_XRDIRS)
++CLOSED_XRDIRS1	= $(SHARED_XRDIRS:../%=../% ../../../closed/uts/%)
++CLOSED_XRDIRS2	= $(CLOSED_XRDIRS1:../../../closed/uts/i86pc=)
++$(CLOSED_BUILD)XRDIRS	= $(CLOSED_XRDIRS2:../../../closed/uts/i86xpv=)
++XRPRUNE	= sun4v sun4u sun4 sfmmu sparc armv7 arm
+ 
+ cscope.out tags: FRC
+ 	$(XREF) -x $@
+diff --git a/usr/src/uts/intel/Makefile.rules b/usr/src/uts/intel/Makefile.rules
+index 2b21ba7..e4c288f 100644
+--- a/usr/src/uts/intel/Makefile.rules
++++ b/usr/src/uts/intel/Makefile.rules
+@@ -257,6 +257,10 @@ $(OBJS_DIR)/%.o:		$(UTSBASE)/intel/pcbe/%.c
+ 	$(COMPILE.c) -o $@ $<
+ 	$(CTFCONVERT_O)
+ 
++#
++# XXX We have copied this to its own module in psm to share with ARM. We should
++# remove the Intel copy of the code and move it over there once we test it.
++#
+ $(OBJS_DIR)/%.o:		$(UTSBASE)/intel/promif/%.c
+ 	$(COMPILE.c) -o $@ $<
+ 	$(CTFCONVERT_O)
+diff --git a/usr/src/uts/intel/amd64/krtld/doreloc.c b/usr/src/uts/intel/amd64/krtld/doreloc.c
+index aac6f6d..c8ae596 100644
+--- a/usr/src/uts/intel/amd64/krtld/doreloc.c
++++ b/usr/src/uts/intel/amd64/krtld/doreloc.c
+@@ -34,7 +34,7 @@
+ #endif
+ #include	<stdio.h>
+ #include	"sgs.h"
+-#include	"machdep.h"
++#include	<i386/machdep_x86.h>
+ #include	"libld.h"
+ #include	"reloc.h"
+ #include	"conv.h"
+diff --git a/usr/src/uts/intel/ia32/krtld/doreloc.c b/usr/src/uts/intel/ia32/krtld/doreloc.c
+index 34b7ad2..07384f9 100644
+--- a/usr/src/uts/intel/ia32/krtld/doreloc.c
++++ b/usr/src/uts/intel/ia32/krtld/doreloc.c
+@@ -34,7 +34,7 @@
+ #endif
+ #include	<stdio.h>
+ #include	"sgs.h"
+-#include	"machdep.h"
++#include	<i386/machdep_x86.h>
+ #include	"libld.h"
+ #include	"reloc.h"
+ #include	"conv.h"
+diff --git a/usr/src/uts/sparc/krtld/doreloc.c b/usr/src/uts/sparc/krtld/doreloc.c
+index ecb213a..a9efe5f 100644
+--- a/usr/src/uts/sparc/krtld/doreloc.c
++++ b/usr/src/uts/sparc/krtld/doreloc.c
+@@ -34,7 +34,7 @@
+ #endif
+ #include	<stdio.h>
+ #include	"sgs.h"
+-#include	"machdep.h"
++#include	<sparc/machdep_sparc.h>
+ #include	"libld.h"
+ #include	"reloc.h"
+ #include	"conv.h"
+diff --git a/usr/src/uts/sun4u/Makefile b/usr/src/uts/sun4u/Makefile
+index d8fc99e..441f3ee 100644
+--- a/usr/src/uts/sun4u/Makefile
++++ b/usr/src/uts/sun4u/Makefile
+@@ -279,7 +279,7 @@ include ../Makefile.targ
+ # sun4u-related directories.
+ #
+ XRDIRS	= ../sun4u ../sun4 ../sfmmu ../sparc ../sun ../common
+-XRPRUNE = i86pc
++XRPRUNE = i86pc i86xpv intel sun4v armv7 arm
+ 
+ cscope.out tags: FRC
+ 	$(XREF) -x $@
+diff --git a/usr/src/uts/sun4v/Makefile b/usr/src/uts/sun4v/Makefile
+index 4597f6d..c8aadd2 100644
+--- a/usr/src/uts/sun4v/Makefile
++++ b/usr/src/uts/sun4v/Makefile
+@@ -301,7 +301,7 @@ include ../Makefile.targ
+ # sun4v-related directories.
+ #
+ XRDIRS	= ../sun4v ../sun4 ../sfmmu ../sparc ../sun ../common
+-XRPRUNE = i86pc sun4u intel
++XRPRUNE = i86pc intel sun4u armv7 arm
+ 
+ cscope.out tags: FRC
+ 	$(XREF) -x $@
